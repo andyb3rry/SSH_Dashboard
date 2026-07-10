@@ -9,6 +9,18 @@
 
 ---
 
+## 📱 Screenshots
+
+| Server List | Real-Time Resources | Active Processes |
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/cd3afbd5-2e74-46e8-ac1f-d72a5dfd4087" width="240" alt="Server List" /> | <img src="https://github.com/user-attachments/assets/02cf8f98-6cbf-47f5-b3a5-2701edd8f8f1" width="240" alt="Resources" /> | <img src="https://github.com/user-attachments/assets/e932b2bc-f1cc-4d63-b4e7-fa526efc13bc" width="240" alt="Processes" /> |
+
+| SSH Terminal | Docker Management | Cron Jobs |
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/678767aa-0563-4f42-b7b7-5022854b3f1a" width="240" alt="Terminal" /> | <img src="https://github.com/user-attachments/assets/9b4d5e04-88e6-467e-9870-7a0e9dc8e944" width="240" alt="Docker Containers" /> | <img src="https://github.com/user-attachments/assets/2c4d3173-9511-4823-bccf-7eda1af6f127" width="240" alt="Cron Jobs" /> |
+
+---
+
 ## ✨ Key Features
 
 - **📊 Real-Time Resource Monitoring**: Live telemetry graphs tracking CPU load per logical core, RAM consumption, network I/O speeds (`netstat`/`proc`), and disk usage (`df -h`).
@@ -23,13 +35,14 @@
 
 ## 🏗️ Cloudflare Zero Trust Setup
 
-Server Commander SSH allows you to connect securely to your remote Linux servers via **Cloudflare Tunnels** (`cloudflared`) without opening port 22 to the public internet. 
+SSH Dashboard allows you to connect securely to your remote Linux servers via **Cloudflare Tunnels** (`cloudflared`) without opening port 22 to the public internet. 
 
-To eliminate interactive web browser logins (which expire frequently and are clunky on mobile devices), Server Commander SSH uses **Cloudflare Service Tokens**. The application upgrades the HTTP request to a WebSocket (`wss://`) over `/cdn-cgi/access/cli` while passing `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers directly during the handshake.
+To eliminate interactive web browser logins (which expire frequently and are clunky on mobile devices), SSH Dashboard uses **Cloudflare Service Tokens**. The application upgrades the HTTP request to a WebSocket (`wss://`) over `/cdn-cgi/access/cli` while passing `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers directly during the handshake.
 
 ### 📋 Step-by-Step Configuration Guide
 
-#### Step 1: Install & Run `cloudflared` on Your Server ([Docs](https://developers.cloudflare.com/tunnel/setup/))
+#### Step 1: Install & Run `cloudflared` on Your Server
+* Follow the [Official Cloudflare Docs](https://developers.cloudflare.com/tunnel/setup/) to set up and run a secure tunnel on your machine.
 
 #### Step 2: Create an Application in Cloudflare Zero Trust
 1. Log into the **Cloudflare Zero Trust Dashboard** ([one.dash.cloudflare.com](https://one.dash.cloudflare.com/)).
@@ -44,10 +57,10 @@ To eliminate interactive web browser logins (which expire frequently and are clu
 #### Step 3: Create a Service Token (`Client ID` + `Client Secret`)
 1. In another tab of the Cloudflare Zero Trust dashboard, navigate to **Access** -> **Service Auth** -> **Service Tokens**.
 2. Click **Create Service Token**.
-3. Name your token (e.g., `server-commander-app`).
+3. Name your token (e.g., `ssh-dashboard-app`).
 4. Set **Token Duration** to **Non-expiring** (or your desired lifespan).
 5. Click **Generate Token**.
-6. **IMPORTANT**: Immediately copy and save the **Client ID** (`CF-Access-Client-Id`) and **Client Secret** (`CF-Access-Client-Secret`). *You will not be able to see the secret again after closing the window.*
+6. > ⚠️ **IMPORTANT**: Immediately copy and save the **Client ID** (`CF-Access-Client-Id`) and **Client Secret** (`CF-Access-Client-Secret`). *You will not be able to see the secret again after closing the window.*
 
 #### Step 4: Link the Service Token to Your Access Policy
 1. Return to the **Policies** tab of the application you created in Step 2.
@@ -56,11 +69,11 @@ To eliminate interactive web browser logins (which expire frequently and are clu
    - **Action**: `Service Auth` (or `Allow`)
 3. Under **Configure rules** -> **Include**, select:
    - **Selector**: `Service Token`
-   - **Value**: Select the Service Token you created (`server-commander-app`).
+   - **Value**: Select the Service Token you created (`ssh-dashboard-app`).
 4. Click **Next** -> **Add application** to save.
 
-#### Step 5: Configure Server Commander SSH
-1. Open **Server Commander SSH** and click **Add Server** (`+`).
+#### Step 5: Configure SSH Dashboard
+1. Open the **SSH Dashboard** mobile app and click **Add Server** (`+`).
 2. Enter your server credentials:
    - **Host / IP**: `ssh.yourdomain.com`
    - **Port**: `443` (or `22`)
@@ -75,6 +88,7 @@ To eliminate interactive web browser logins (which expire frequently and are clu
 ---
 
 ## 🔒 Security
+
 - **No Cleartext Storage**: All sensitive fields are isolated from standard preference files and written exclusively to encrypted platform storage (`flutter_secure_storage`).
 - **Automatic Sanitization**: If existing server profiles contain legacy credentials in `SharedPreferences`, the app automatically migrates them to secure storage upon startup and sanitizes the local JSON payload.
 - **Biometric & OS Protection**: Enforces biometric/PIN authentication on app resume and blocks screen capturing (`FLAG_SECURE` / disabled Android backups) to prevent data leaks.
@@ -85,4 +99,5 @@ To eliminate interactive web browser logins (which expire frequently and are clu
 ---
 
 ## 📄 License
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
