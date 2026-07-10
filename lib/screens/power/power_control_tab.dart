@@ -1,0 +1,364 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../providers/server_provider.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/glass_card.dart';
+import '../../widgets/disconnected_server_view.dart';
+import 'cron_manager_section.dart';
+
+class PowerControlTab extends StatefulWidget {
+  const PowerControlTab({super.key});
+
+  @override
+  State<PowerControlTab> createState() => _PowerControlTabState();
+}
+
+class _PowerControlTabState extends State<PowerControlTab> {
+  bool _isUpdating = false;
+  String _updateLogs = '';
+
+  void _confirmPowerAction(BuildContext context, {required bool isReboot}) {
+    final provider = Provider.of<ServerProvider>(context, listen: false);
+    final passwordController = TextEditingController(text: provider.activeProfile?.password ?? '');
+    bool obscure = true;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                isReboot ? Icons.restart_alt : Icons.power_settings_new,
+                color: AppTheme.crimson,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(isReboot ? 'Confirm Reboot (sudo)' : 'Confirm Shutdown (sudo)'),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isReboot
+                    ? 'You are about to send a reboot command to the Linux server. Root/sudo password is required for confirmation (`sudo -S`):'
+                    : 'You are about to shut down the Linux server. Root/sudo password is required for confirmation:',
+                style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                style: GoogleFonts.outfit(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Sudo (Root) Password',
+                  prefixIcon: const Icon(Icons.security, color: AppTheme.crimson),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white60),
+                    onPressed: () => setDialogState(() => obscure = !obscure),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                passwordController.clear();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.crimson, foregroundColor: Colors.white),
+              onPressed: () {
+                final pwd = passwordController.text;
+                passwordController.clear();
+                Navigator.pop(ctx);
+                if (isReboot) {
+                  provider.rebootServer(pwd);
+                } else {
+                  provider.shutdownServer(pwd);
+                }
+              },
+              child: Text(isReboot ? 'CONFIRM & REBOOT' : 'CONFIRM & SHUTDOWN'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) => passwordController.dispose());
+  }
+
+  void _runSystemUpdate(BuildContext context) {
+    final provider = Provider.of<ServerProvider>(context, listen: false);
+    final command = provider.activeProfile?.customUpdateCommand ?? 'sudo apt-get update && sudo apt-get -y upgrade';
+    final passwordController = TextEditingController(text: provider.activeProfile?.password ?? '');
+    bool obscure = true;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.system_update_alt, color: AppTheme.emerald),
+              const SizedBox(width: 10),
+              Expanded(
+                child: const Text('Confirm System Update'),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'To perform packet updates on the Linux server with administrative privileges, confirm or enter your sudo/root password (`sudo -S`):',
+                style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                style: GoogleFonts.outfit(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Sudo (Root) Password',
+                  prefixIcon: const Icon(Icons.security, color: AppTheme.emerald),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white60),
+                    onPressed: () => setDialogState(() => obscure = !obscure),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                passwordController.clear();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emerald, foregroundColor: AppTheme.obsidian),
+              onPressed: () async {
+                final pwd = passwordController.text;
+                passwordController.clear();
+                Navigator.pop(ctx);
+                setState(() {
+                  _isUpdating = true;
+                  _updateLogs = '🚀 Starting Linux system update via sudo -S...\nRunning command: $command\n\n';
+                });
+
+                try {
+                  final output = await provider.executeSudoCommand(command, pwd);
+                  if (mounted) {
+                    setState(() {
+                      _updateLogs += '$output\n\n✅ Update completed successfully!';
+                      _isUpdating = false;
+                    });
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    setState(() {
+                      _updateLogs += '\n❌ Error during update:\n$e';
+                      _isUpdating = false;
+                    });
+                  }
+                }
+              },
+              child: const Text('CONFIRM & UPDATE'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) => passwordController.dispose());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<ServerProvider>(context);
+    final isConnected = provider.status == ConnectionStatus.connected;
+
+    if (!isConnected) {
+      return const DisconnectedServerView(
+        title: 'System & Power Actions Disabled',
+        icon: Icons.bolt_outlined,
+        iconColor: AppTheme.amber,
+        subtitle: 'Connect to an SSH server to perform remote reboots, emergency shutdowns, and system updates with password confirmation.',
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Power Actions Section
+          Text(
+            'Power Control (Power & Reboot)',
+            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GlassCard(
+                  onTap: () => _confirmPowerAction(context, isReboot: true),
+                  borderColor: AppTheme.amber.withValues(alpha: 0.6),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.amber.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.restart_alt, color: AppTheme.amber, size: 32),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Reboot Server',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'sudo reboot',
+                        style: GoogleFonts.jetBrainsMono(color: Colors.white60, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: GlassCard(
+                  onTap: () => _confirmPowerAction(context, isReboot: false),
+                  borderColor: AppTheme.crimson.withValues(alpha: 0.6),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.crimson.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.power_settings_new, color: AppTheme.crimson, size: 32),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Shutdown Server',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'sudo poweroff',
+                        style: GoogleFonts.jetBrainsMono(color: Colors.white60, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Package Maintenance and System Update
+          Text(
+            'Package Maintenance & System Update',
+            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 12),
+          GlassCard(
+            borderColor: AppTheme.emerald.withValues(alpha: 0.4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.system_update, color: AppTheme.emerald),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Update',
+                      style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Configured command for this profile:',
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.obsidian,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.cardBorder),
+                  ),
+                  child: Text(
+                    provider.activeProfile?.customUpdateCommand ?? 'sudo apt-get update && sudo apt-get -y upgrade',
+                    style: GoogleFonts.jetBrainsMono(color: AppTheme.neonCyan, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.emerald,
+                      foregroundColor: AppTheme.obsidian,
+                    ),
+                    onPressed: _isUpdating ? null : () => _runSystemUpdate(context),
+                    icon: _isUpdating
+                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Icon(Icons.rocket_launch),
+                    label: Text(_isUpdating ? 'Updating...' : 'Start Update'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // Console Output
+          if (_updateLogs.isNotEmpty) ...[
+            Text(
+              'Update Terminal Output',
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: 220,
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.cardBorder),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  _updateLogs,
+                  style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+          const CronManagerSection(),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}
