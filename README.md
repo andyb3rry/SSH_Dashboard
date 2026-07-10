@@ -14,7 +14,7 @@
   <a href="https://github.com/andyb3rry/SSH_Dashboard/releases">
     <img src="https://user-images.githubusercontent.com/69304392/148696068-0cfea65d-b18f-4685-82b5-329a330b1c0d.png"
     alt="Get it on GitHub" align="middle" height="80" /></a>
-  <a href="obtainium://add/github.com/andyb3rry/SSH_Dashboard">
+  <a href="https://github.com/ImranR98/Obtainium/tree/main">
     <img src="https://github.com/ImranR98/Obtainium/raw/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" align="middle" height="80" /></a>
 </div>
 
