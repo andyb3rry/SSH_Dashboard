@@ -15,6 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final StorageService _storage = StorageService();
 
   bool _appLockEnabled = false;
+  int _appLockTimeoutSeconds = 60;
   double _terminalFontSize = 14.0;
   int _sshTimeoutSeconds = 25;
   bool _isLoading = true;
@@ -27,12 +28,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final lock = await _storage.isAppLockEnabled();
+    final appLockTimeout = await _storage.getAppLockTimeoutSeconds();
     final font = await _storage.getTerminalFontSize();
     final timeout = await _storage.getSshTimeoutSeconds();
 
     if (mounted) {
       setState(() {
         _appLockEnabled = lock;
+        _appLockTimeoutSeconds = appLockTimeout;
         _terminalFontSize = font;
         _sshTimeoutSeconds = timeout;
         _isLoading = false;
@@ -99,6 +102,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() => _sshTimeoutSeconds = seconds);
     }
+  }
+
+  Future<void> _changeAppLockTimeout(int seconds) async {
+    await _storage.setAppLockTimeoutSeconds(seconds);
+    if (mounted) {
+      setState(() => _appLockTimeoutSeconds = seconds);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⏳ App Lock timeout updated!'),
+          backgroundColor: AppTheme.emerald,
+        ),
+      );
+    }
+  }
+
+  String _getTimeoutExplanation(int seconds) {
+    if (seconds == -1) {
+      return 'Authentication is only required when launching the app from cold start / full close.';
+    }
+    if (seconds == 0) {
+      return 'Authentication is required immediately whenever you leave or background the app.';
+    }
+    String timeStr = seconds < 60 ? '${seconds}s' : '${seconds ~/ 60}m';
+    return 'Authentication is required when left in background for over $timeStr (and on cold start).';
   }
 
   Future<void> _clearHostKeys() async {
@@ -170,26 +197,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppTheme.cardBorder),
                   ),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                    child: SwitchListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      activeThumbColor: AppTheme.neonCyan,
-                      activeTrackColor: AppTheme.neonCyan.withValues(alpha: 0.3),
-                      title: Text('Biometric / PIN App Lock', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                      subtitle: Text(
-                        'Require fingerprint, face unlock, or device PIN every time SSH Dashboard starts or resumes from background.',
-                        style: GoogleFonts.outfit(color: Colors.white60, fontSize: 13),
+                  child: Column(
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(16),
+                        child: SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          activeThumbColor: AppTheme.neonCyan,
+                          activeTrackColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+                          title: Text('Biometric / PIN App Lock', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          subtitle: Text(
+                            'Require fingerprint, face unlock, or device PIN every time SSH Dashboard starts or resumes from background.',
+                            style: GoogleFonts.outfit(color: Colors.white60, fontSize: 13),
+                          ),
+                          value: _appLockEnabled,
+                          onChanged: _toggleAppLock,
+                          secondary: Icon(
+                            _appLockEnabled ? Icons.lock : Icons.lock_open,
+                            color: _appLockEnabled ? AppTheme.neonCyan : Colors.white38,
+                            size: 28,
+                          ),
+                        ),
                       ),
-                      value: _appLockEnabled,
-                      onChanged: _toggleAppLock,
-                      secondary: Icon(
-                        _appLockEnabled ? Icons.lock : Icons.lock_open,
-                        color: _appLockEnabled ? AppTheme.neonCyan : Colors.white38,
-                        size: 28,
-                      ),
-                    ),
+                      if (_appLockEnabled) ...[
+                        Divider(color: AppTheme.cardBorder.withValues(alpha: 0.5), height: 1),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.timer_outlined, color: AppTheme.neonCyan),
+                                        const SizedBox(width: 12),
+                                        Flexible(
+                                          child: Text(
+                                            'Lock Timeout',
+                                            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.obsidian,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: AppTheme.cardBorder),
+                                    ),
+                                    child: DropdownButton<int>(
+                                      value: _appLockTimeoutSeconds,
+                                      dropdownColor: AppTheme.obsidian,
+                                      style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontSize: 14),
+                                      underline: const SizedBox(),
+                                      items: const [
+                                        DropdownMenuItem(value: -1, child: Text('On Close Only')),
+                                        DropdownMenuItem(value: 0, child: Text('Immediately')),
+                                        DropdownMenuItem(value: 30, child: Text('After 30s')),
+                                        DropdownMenuItem(value: 60, child: Text('After 1m')),
+                                        DropdownMenuItem(value: 300, child: Text('After 5m')),
+                                        DropdownMenuItem(value: 900, child: Text('After 15m')),
+                                      ],
+                                      onChanged: (val) {
+                                        if (val != null) _changeAppLockTimeout(val);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 36),
+                                child: Text(
+                                  _getTimeoutExplanation(_appLockTimeoutSeconds),
+                                  style: GoogleFonts.outfit(color: Colors.white60, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),

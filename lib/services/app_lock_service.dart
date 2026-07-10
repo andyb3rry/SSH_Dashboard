@@ -10,8 +10,10 @@ class AppLockService {
   final LocalAuthentication _auth = LocalAuthentication();
   bool _isUnlocked = false;
   bool _isAuthenticating = false;
+  DateTime? _pausedAt;
 
   bool get isUnlocked => _isUnlocked;
+  bool get isAuthenticating => _isAuthenticating;
 
   Future<bool> authenticate({
     String reason = 'Please authenticate to access Server Commander SSH',
@@ -23,9 +25,10 @@ class AppLockService {
         _isUnlocked = true;
         return true;
       }
+      if (_isUnlocked || _isAuthenticating) return _isUnlocked;
+    } else {
+      if (_isAuthenticating) return false;
     }
-
-    if (_isUnlocked || _isAuthenticating) return _isUnlocked;
     _isAuthenticating = true;
 
     try {
@@ -55,10 +58,52 @@ class AppLockService {
     }
   }
 
+  Future<void> onAppPaused() async {
+    if (_isAuthenticating || !_isUnlocked) return;
+    
+    final enabled = await StorageService().isAppLockEnabled();
+    if (!enabled) return;
+
+    final timeout = await StorageService().getAppLockTimeoutSeconds();
+    if (timeout == 0) {
+      _isUnlocked = false;
+      _pausedAt = null;
+    } else if (timeout == -1) {
+      _pausedAt = null;
+    } else {
+      _pausedAt = DateTime.now();
+    }
+  }
+
+  Future<void> onAppResumed() async {
+    if (_isAuthenticating || !_isUnlocked) return;
+
+    final enabled = await StorageService().isAppLockEnabled();
+    if (!enabled) {
+      _pausedAt = null;
+      return;
+    }
+
+    final timeout = await StorageService().getAppLockTimeoutSeconds();
+    if (timeout == -1 || timeout == 0) {
+      _pausedAt = null;
+      return;
+    }
+
+    if (_pausedAt != null) {
+      final elapsed = DateTime.now().difference(_pausedAt!).inSeconds;
+      _pausedAt = null;
+      if (elapsed >= timeout) {
+        _isUnlocked = false;
+      }
+    }
+  }
+
   Future<void> lock() async {
     final enabled = await StorageService().isAppLockEnabled();
     if (enabled) {
       _isUnlocked = false;
+      _pausedAt = null;
     }
   }
 }

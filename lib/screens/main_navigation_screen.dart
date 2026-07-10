@@ -81,12 +81,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      AppLockService().onAppPaused().then((_) {
+        if (mounted) setState(() => _isUnlocked = AppLockService().isUnlocked);
+      });
+    } else if (state == AppLifecycleState.detached) {
       AppLockService().lock().then((_) {
         if (mounted) setState(() => _isUnlocked = AppLockService().isUnlocked);
       });
     } else if (state == AppLifecycleState.resumed) {
-      _checkAppLock();
+      AppLockService().onAppResumed().then((_) {
+        if (mounted) setState(() => _isUnlocked = AppLockService().isUnlocked);
+        _checkAppLock();
+      });
     }
   }
 

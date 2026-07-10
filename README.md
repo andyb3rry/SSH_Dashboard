@@ -1,4 +1,4 @@
-# SSH Dashboard 
+# SSH Dashboard
 
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/dart-%230175C2.svg?style=for-the-badge&logo=dart&logoColor=white)
@@ -9,11 +9,18 @@
 
 ---
 
-## 📱 Screenshots
-
+## ⬇️ Download
 <div align="center">
-  <img src="https://raw.githubusercontent.com/giuseppe-filipe/HestiaCP-Theme-Modern-Dark/main/allineamento_screenshot.png" alt="Allineamento Screenshot">
+  <a href="https://github.com/andyb3rry/SSH_Dashboard/releases">
+    <img src="https://user-images.githubusercontent.com/69304392/148696068-0cfea65d-b18f-4685-82b5-329a330b1c0d.png"
+    alt="Get it on GitHub" align="middle" height="80" /></a>
+  <a href="obtainium://add/github.com/andyb3rry/SSH_Dashboard">
+    <img src="https://github.com/ImranR98/Obtainium/raw/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" align="middle" height="80" /></a>
 </div>
+
+---
+
+## 📱 Screenshots
 
 | Server List | Real-Time Resources | Active Processes |
 | :---: | :---: | :---: |

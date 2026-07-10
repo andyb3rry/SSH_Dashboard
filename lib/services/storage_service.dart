@@ -133,6 +133,7 @@ class StorageService {
   }
 
   static const String _appLockEnabledKey = 'app_lock_biometric_enabled';
+  static const String _appLockTimeoutKey = 'app_lock_timeout_seconds';
   static const String _terminalFontSizeKey = 'terminal_font_size';
   static const String _sshTimeoutKey = 'ssh_command_timeout_seconds';
   static const String _autoRefreshIntervalKey = 'auto_refresh_interval_seconds';
@@ -145,6 +146,16 @@ class StorageService {
   Future<void> setAppLockEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_appLockEnabledKey, enabled);
+  }
+
+  Future<int> getAppLockTimeoutSeconds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_appLockTimeoutKey) ?? 60;
+  }
+
+  Future<void> setAppLockTimeoutSeconds(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_appLockTimeoutKey, seconds);
   }
 
   Future<double> getTerminalFontSize() async {
