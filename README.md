@@ -34,12 +34,12 @@
 
 ## ✨ Key Features
 
-- **📊 Real-Time Resource Monitoring**: Live telemetry graphs tracking CPU load per logical core, RAM consumption, network I/O speeds (`netstat`/`proc`), and disk usage (`df -h`).
-- **🐳 Docker Container Management**: Run, stop, restart, and remove Docker containers on your server.
-- **🕘 Cron Job Management**: Add, edit, delete, and run cron jobs on your server.
+- **📊 Real-Time Resource Monitoring**: Live telemetry graphs tracking CPU load, RAM consumption, network I/O speeds, and disk usage.
+- **🐳 Docker Container Management**: Run, stop, restart, and remove Docker containers.
+- **🕘 Cron Job Management**: Add, edit, delete, run and check the last execution of the cron jobs on your server.
 - **🖥️ Terminal**: Built-in full VT100/Xterm compatible SSH terminal using `dartssh2`, supporting interactive commands, sudo, and custom scripts.
 - **⚡ Power Management**: Instant one-click triggers for system `Reboot`, `Shutdown`, system updates (`apt/dnf update & upgrade`), and local/remote commands.
-- **🔐 Cloudflare Zero Trust Native Integration**: Seamlessly connect to servers hidden behind Cloudflare Tunnels (`cloudflared`) over WebSockets (`wss://`) without opening web browsers or dealing with expiring session cookies. Uses non-expiring **Service Tokens**.
+- **🔐 Cloudflare Zero Trust Native Integration**: Seamlessly connect to servers hidden behind Cloudflare Tunnels over WebSockets. Uses non-expiring **Service Tokens**.
 - **🛡️ Enterprise Secure Storage**: Passwords, SSH private keys, and Cloudflare Client Secrets are stored natively in Android's KeyStore.
 
 ---
@@ -102,7 +102,7 @@ To eliminate interactive web browser logins (which expire frequently and are clu
 
 - **No Cleartext Storage**: All sensitive fields are isolated from standard preference files and written exclusively to encrypted platform storage (`flutter_secure_storage`).
 - **Automatic Sanitization**: If existing server profiles contain legacy credentials in `SharedPreferences`, the app automatically migrates them to secure storage upon startup and sanitizes the local JSON payload.
-- **Biometric & OS Protection**: Enforces biometric/PIN authentication on app resume and blocks screen capturing (`FLAG_SECURE` / disabled Android backups) to prevent data leaks.
+- **Biometric & OS Protection**: Optional biometric/PIN authentication on app resume.
 - **SSH MitM Prevention**: Implements Trust-On-First-Use (TOFU) host key verification, blocking connections if the server's fingerprint unexpectedly changes.
 - **Sudo Obfuscation**: Root commands and passwords are piped directly through `stdin`, remaining completely invisible to the server's process list (`ps aux` or `/proc`).
 - **Injection Hardening**: Strict regex validation and POSIX boundary checks prevent arbitrary command injection during Docker and process management.
