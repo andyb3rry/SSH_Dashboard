@@ -381,7 +381,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Server Commander SSH',
+                  'SSH Dashboard',
                   style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 8),

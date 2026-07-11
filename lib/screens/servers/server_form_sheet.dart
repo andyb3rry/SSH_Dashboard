@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/server_profile.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/command_validator.dart';
 
 class ServerFormSheet extends StatefulWidget {
   final ServerProfile? existingProfile;
@@ -40,7 +41,7 @@ class _ServerFormSheetState extends State<ServerFormSheet> {
     _passwordController = TextEditingController(text: p?.password ?? '');
     _privateKeyController = TextEditingController(text: p?.privateKey ?? '');
     _updateCommandController = TextEditingController(
-      text: p?.customUpdateCommand ?? 'sudo apt-get update && sudo apt-get -y upgrade',
+      text: p?.customUpdateCommand ?? 'sudo apt update && sudo apt upgrade -y',
     );
     _cloudflareClientIdController = TextEditingController(text: p?.cloudflareClientId ?? '');
     _cloudflareClientSecretController = TextEditingController(text: p?.cloudflareClientSecret ?? '');
@@ -328,13 +329,22 @@ class _ServerFormSheetState extends State<ServerFormSheet> {
               const SizedBox(height: 14),
               TextFormField(
                 controller: _updateCommandController,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 style: GoogleFonts.firaCode(color: Colors.white, fontSize: 13),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return null;
+                  final res = CommandValidator.validateUpdateCommand(val);
+                  if (res.isBlocked) {
+                    return res.message;
+                  }
+                  return null;
+                },
                 decoration: InputDecoration(
                   labelText: 'Quick Update Command',
                   labelStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14),
                   hintStyle: GoogleFonts.firaCode(color: const Color(0xFF64748B), fontSize: 12.5),
                   prefixIcon: const Icon(Icons.system_update_alt, color: AppTheme.emerald),
-                  hintText: 'sudo apt-get update && sudo apt-get -y upgrade',
+                  hintText: 'sudo apt update && sudo apt upgrade -y',
                 ),
               ),
               const SizedBox(height: 24),

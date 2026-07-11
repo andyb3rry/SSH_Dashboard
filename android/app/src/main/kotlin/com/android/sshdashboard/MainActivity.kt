@@ -1,4 +1,4 @@
-package com.servercommander.server_commander
+package com.android.sshdashboard
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

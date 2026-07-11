@@ -6,6 +6,7 @@ import '../../models/cron_job.dart';
 import '../../providers/server_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import '../../utils/command_validator.dart';
 
 class CronManagerSection extends StatefulWidget {
   const CronManagerSection({super.key});
@@ -31,7 +32,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     });
   }
 
-  Future<String?> _getSudoPassword(BuildContext context, {bool forceConfirmation = false, String actionName = 'Root Crontab Access'}) async {
+  Future<String?> _getSudoPassword(BuildContext context, {bool forceConfirmation = false, String actionName = 'Root Crontab Access', String? exactCommand}) async {
     final provider = Provider.of<ServerProvider>(context, listen: false);
     final storedPwd = provider.activeProfile?.password ?? '';
     if (!forceConfirmation && storedPwd.isNotEmpty) return storedPwd;
@@ -53,26 +54,49 @@ class _CronManagerSectionState extends State<CronManagerSection> {
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You are about to modify or execute root crontab ($actionName). Please confirm your sudo password to proceed:',
-              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Password...',
-                hintStyle: const TextStyle(color: Colors.white30),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You are about to modify or execute root crontab ($actionName). Please confirm your sudo password to proceed:',
+                style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              if (exactCommand != null && exactCommand.isNotEmpty) ...[
+                Text(
+                  'Exact Root Crontab entry / command:',
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceDark,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.amber),
+                  ),
+                  child: SelectableText(
+                    exactCommand,
+                    style: GoogleFonts.firaCode(color: AppTheme.amber, fontSize: 12.5),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Password...',
+                  hintStyle: const TextStyle(color: Colors.white30),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -278,7 +302,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     try {
       String output = '';
       if (job.isRoot) {
-        final sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: 'Instant Execution (${job.humanReadableSchedule})');
+        final sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: 'Instant Execution (${job.humanReadableSchedule})', exactCommand: job.command);
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() {
             _isExecutingNow = false;
@@ -344,6 +368,8 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: scheduleController,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    onChanged: (_) => setDialogState(() {}),
                     style: GoogleFonts.jetBrainsMono(color: AppTheme.neonCyan),
                     decoration: InputDecoration(
                       hintText: 'e.g., 0 4 * * * or @daily',
@@ -351,20 +377,25 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a valid schedule' : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Please enter a valid schedule';
+                      final val = CommandValidator.validateCronJob(scheduleController.text, commandController.text, isRoot: _isRootTab);
+                      if (val.isBlocked) return val.message;
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      _presetChip('Midnight (@daily)', '@daily', scheduleController),
-                      _presetChip('Hourly (@hourly)', '@hourly', scheduleController),
-                      _presetChip('Weekly (@weekly)', '@weekly', scheduleController),
-                      _presetChip('Every 15 min', '*/15 * * * *', scheduleController),
-                      _presetChip('Every day at 04:00', '0 4 * * *', scheduleController),
-                      _presetChip('Every Monday at 01:30', '30 1 * * 1', scheduleController),
-                      _presetChip('On boot (@reboot)', '@reboot', scheduleController),
+                      _presetChip('Midnight (@daily)', '@daily', scheduleController, () => setDialogState(() {})),
+                      _presetChip('Hourly (@hourly)', '@hourly', scheduleController, () => setDialogState(() {})),
+                      _presetChip('Weekly (@weekly)', '@weekly', scheduleController, () => setDialogState(() {})),
+                      _presetChip('Every 15 min', '*/15 * * * *', scheduleController, () => setDialogState(() {})),
+                      _presetChip('Every day at 04:00', '0 4 * * *', scheduleController, () => setDialogState(() {})),
+                      _presetChip('Every Monday at 01:30', '30 1 * * 1', scheduleController, () => setDialogState(() {})),
+                      _presetChip('On boot (@reboot)', '@reboot', scheduleController, () => setDialogState(() {})),
                     ],
                   ),
                   const SizedBox(height: 18),
@@ -376,6 +407,8 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                   TextFormField(
                     controller: commandController,
                     maxLines: 2,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    onChanged: (_) => setDialogState(() {}),
                     style: GoogleFonts.jetBrainsMono(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: 'e.g., /home/user/backup.sh > /tmp/backup.log 2>&1',
@@ -383,7 +416,74 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Please enter the command to execute' : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Please enter the command to execute';
+                      final val = CommandValidator.validateCronJob(scheduleController.text, commandController.text, isRoot: _isRootTab);
+                      if (val.isBlocked) return val.message;
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Builder(
+                    builder: (_) {
+                      final val = CommandValidator.validateCronJob(scheduleController.text, commandController.text, isRoot: _isRootTab);
+                      if (val.isBlocked && val.message != null) {
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.crimson.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.crimson),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: AppTheme.crimson, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(val.message!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 12.5)),
+                              ),
+                            ],
+                          ),
+                        );
+                      } else if (val.isWarning && val.message != null) {
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.amber.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.amber),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: AppTheme.amber, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(val.message!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 12.5)),
+                              ),
+                            ],
+                          ),
+                        );
+                      } else if (_isRootTab) {
+                        return Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.amber.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.amber.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.admin_panel_settings, color: AppTheme.amber, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text('Running with Root privileges in system crontab.', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                   ),
                 ],
               ),
@@ -394,21 +494,31 @@ class _CronManagerSectionState extends State<CronManagerSection> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.neonPurple,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.pop(ctx);
-                await _saveJobToCrontab(
-                  oldJob: jobToEdit,
-                  newSchedule: scheduleController.text.trim(),
-                  newCommand: commandController.text.trim(),
+            Builder(
+              builder: (_) {
+                final val = CommandValidator.validateCronJob(scheduleController.text, commandController.text, isRoot: _isRootTab);
+                return ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: val.isWarning ? AppTheme.amber : AppTheme.neonPurple,
+                    foregroundColor: val.isWarning ? AppTheme.obsidian : Colors.white,
+                  ),
+                  onPressed: val.isBlocked
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          Navigator.pop(ctx);
+                          await _saveJobToCrontab(
+                            oldJob: jobToEdit,
+                            newSchedule: scheduleController.text.trim(),
+                            newCommand: commandController.text.trim(),
+                          );
+                        },
+                  child: Text(
+                    jobToEdit != null ? 'SAVE CHANGES' : 'ADD TO CRONTAB',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                  ),
                 );
               },
-              child: Text(jobToEdit != null ? 'SAVE CHANGES' : 'ADD TO CRONTAB'),
             ),
           ],
         ),
@@ -416,13 +526,14 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     );
   }
 
-  Widget _presetChip(String label, String value, TextEditingController controller) {
+  Widget _presetChip(String label, String value, TextEditingController controller, [VoidCallback? onSelect]) {
     return ActionChip(
       backgroundColor: AppTheme.obsidian,
       side: BorderSide(color: AppTheme.neonPurple.withValues(alpha: 0.5)),
       label: Text(label, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
       onPressed: () {
         controller.text = value;
+        onSelect?.call();
       },
     );
   }
@@ -461,10 +572,11 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     try {
       String currentCrontab = '';
       String? sudoPwd = '';
+      final newLine = '$newSchedule $newCommand';
 
       if (_isRootTab) {
         if (!mounted) return;
-        sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: oldJob != null ? 'Edit Root Cron Job' : 'Add Root Cron Job');
+        sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: oldJob != null ? 'Edit Root Cron Job' : 'Add Root Cron Job', exactCommand: newLine);
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() => _isLoading = false);
           return;
@@ -475,8 +587,6 @@ class _CronManagerSectionState extends State<CronManagerSection> {
       }
 
       List<String> lines = currentCrontab.split('\n').where((l) => l.trim().isNotEmpty).toList();
-
-      final newLine = '$newSchedule $newCommand';
 
       if (oldJob != null) {
         final idx = lines.indexWhere((l) => l.trim() == oldJob.rawLine.trim());
@@ -544,7 +654,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
       if (_isRootTab) {
         if (!mounted) return;
-        sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: 'Delete Root Cron Job');
+        sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: 'Delete Root Cron Job', exactCommand: 'DELETE: ${job.rawLine}');
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() => _isLoading = false);
           return;

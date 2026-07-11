@@ -21,7 +21,7 @@ class ServerCommanderApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Server Commander SSH',
+        title: 'SSH Dashboard',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
         home: const MainNavigationScreen(),

@@ -16,7 +16,7 @@ class AppLockService {
   bool get isAuthenticating => _isAuthenticating;
 
   Future<bool> authenticate({
-    String reason = 'Please authenticate to access Server Commander SSH',
+    String reason = 'Please authenticate to access SSH Dashboard',
     bool force = false,
   }) async {
     if (!force) {

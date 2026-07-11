@@ -5,6 +5,7 @@ import '../../providers/server_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/disconnected_server_view.dart';
+import '../../utils/command_validator.dart';
 import 'cron_manager_section.dart';
 
 class PowerControlTab extends StatefulWidget {
@@ -96,7 +97,8 @@ class _PowerControlTabState extends State<PowerControlTab> {
 
   void _runSystemUpdate(BuildContext context) {
     final provider = Provider.of<ServerProvider>(context, listen: false);
-    final command = provider.activeProfile?.customUpdateCommand ?? 'sudo apt-get update && sudo apt-get -y upgrade';
+    final command = provider.activeProfile?.customUpdateCommand ?? 'sudo apt update && sudo apt upgrade -y';
+    final validation = CommandValidator.validateUpdateCommand(command);
     final passwordController = TextEditingController(text: provider.activeProfile?.password ?? '');
     bool obscure = true;
 
@@ -106,37 +108,130 @@ class _PowerControlTabState extends State<PowerControlTab> {
         builder: (context, setDialogState) => AlertDialog(
           title: Row(
             children: [
-              const Icon(Icons.system_update_alt, color: AppTheme.emerald),
+              Icon(
+                validation.isBlocked
+                    ? Icons.gpp_bad
+                    : validation.isWarning
+                        ? Icons.warning_amber_rounded
+                        : Icons.system_update_alt,
+                color: validation.isBlocked
+                    ? AppTheme.crimson
+                    : validation.isWarning
+                        ? AppTheme.amber
+                        : AppTheme.emerald,
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: const Text('Confirm System Update'),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'To perform packet updates on the Linux server with administrative privileges, confirm or enter your sudo/root password (`sudo -S`):',
-                style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: obscure,
-                style: GoogleFonts.outfit(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Sudo (Root) Password',
-                  prefixIcon: const Icon(Icons.security, color: AppTheme.emerald),
-                  suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white60),
-                    onPressed: () => setDialogState(() => obscure = !obscure),
-                  ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  validation.isBlocked ? 'Security Block: Update' : 'Confirm System Update',
                 ),
               ),
             ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Exact command to execute on Linux (`sudo -S`):',
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.obsidian,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: validation.isBlocked
+                          ? AppTheme.crimson
+                          : validation.isWarning
+                              ? AppTheme.amber
+                              : AppTheme.cardBorder,
+                    ),
+                  ),
+                  child: SelectableText(
+                    command,
+                    style: GoogleFonts.firaCode(
+                      color: validation.isBlocked
+                          ? AppTheme.crimson
+                          : validation.isWarning
+                              ? AppTheme.amber
+                              : AppTheme.neonCyan,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (validation.isBlocked)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.crimson.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.crimson),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: AppTheme.crimson, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            validation.message ?? 'Command blocked due to security risks.',
+                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (validation.isWarning)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.amber.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.amber),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: AppTheme.amber, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            validation.message ?? 'Non-standard update command.',
+                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!validation.isBlocked) ...[
+                  Text(
+                    'To execute this command with root privileges, confirm or enter your sudo password:',
+                    style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13.5),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: obscure,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Sudo (Root) Password',
+                      prefixIcon: const Icon(Icons.security, color: AppTheme.emerald),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white60),
+                        onPressed: () => setDialogState(() => obscure = !obscure),
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -146,36 +241,43 @@ class _PowerControlTabState extends State<PowerControlTab> {
               },
               child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emerald, foregroundColor: AppTheme.obsidian),
-              onPressed: () async {
-                final pwd = passwordController.text;
-                passwordController.clear();
-                Navigator.pop(ctx);
-                setState(() {
-                  _isUpdating = true;
-                  _updateLogs = '🚀 Starting Linux system update via sudo -S...\nRunning command: $command\n\n';
-                });
+            if (!validation.isBlocked)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: validation.isWarning ? AppTheme.amber : AppTheme.emerald,
+                  foregroundColor: AppTheme.obsidian,
+                ),
+                onPressed: () async {
+                  final pwd = passwordController.text;
+                  passwordController.clear();
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _isUpdating = true;
+                    _updateLogs = '🚀 Starting Linux system update via sudo -S...\nRunning command: $command\n\n';
+                  });
 
-                try {
-                  final output = await provider.executeSudoCommand(command, pwd);
-                  if (mounted) {
-                    setState(() {
-                      _updateLogs += '$output\n\n✅ Update completed successfully!';
-                      _isUpdating = false;
-                    });
+                  try {
+                    final output = await provider.executeSudoCommand(command, pwd);
+                    if (mounted) {
+                      setState(() {
+                        _updateLogs += '$output\n\n✅ Update completed successfully!';
+                        _isUpdating = false;
+                      });
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      setState(() {
+                        _updateLogs += '\n❌ Error during update:\n$e';
+                        _isUpdating = false;
+                      });
+                    }
                   }
-                } catch (e) {
-                  if (mounted) {
-                    setState(() {
-                      _updateLogs += '\n❌ Error during update:\n$e';
-                      _isUpdating = false;
-                    });
-                  }
-                }
-              },
-              child: const Text('CONFIRM & UPDATE'),
-            ),
+                },
+                child: Text(
+                  validation.isWarning ? 'CONFIRM WARNING & UPDATE' : 'CONFIRM & UPDATE',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                ),
+              ),
           ],
         ),
       ),
@@ -192,7 +294,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
         title: 'System & Power Actions Disabled',
         icon: Icons.bolt_outlined,
         iconColor: AppTheme.amber,
-        subtitle: 'Connect to an SSH server to perform remote reboots, emergency shutdowns, and system updates with password confirmation.',
+        subtitle: 'Connect to an SSH server to perform remote reboots, emergency shutdowns, and system updates.',
       );
     }
 
@@ -306,7 +408,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
                     border: Border.all(color: AppTheme.cardBorder),
                   ),
                   child: Text(
-                    provider.activeProfile?.customUpdateCommand ?? 'sudo apt-get update && sudo apt-get -y upgrade',
+                    provider.activeProfile?.customUpdateCommand ?? 'sudo apt update && sudo apt upgrade -y',
                     style: GoogleFonts.jetBrainsMono(color: AppTheme.neonCyan, fontSize: 12),
                   ),
                 ),

@@ -105,8 +105,7 @@ To eliminate interactive web browser logins (which expire frequently and are clu
 - **Biometric & OS Protection**: Optional biometric/PIN authentication on app resume.
 - **SSH MitM Prevention**: Implements Trust-On-First-Use (TOFU) host key verification, blocking connections if the server's fingerprint unexpectedly changes.
 - **Sudo Obfuscation**: Root commands and passwords are piped directly through `stdin`, remaining completely invisible to the server's process list (`ps aux` or `/proc`).
-- **Injection Hardening**: Strict regex validation and POSIX boundary checks prevent arbitrary command injection during Docker and process management.
-
+- **Command Injection Hardening**: Implements a dedicated command validation engine that actively monitors inputs across the Server Profile, Docker Management, and Cron Manager. It blocks dangerous execution patterns, prevents root boot persistence exploits, restricts untrusted directories, and disables execution if risks are detected.
 ---
 
 ## 📄 License
