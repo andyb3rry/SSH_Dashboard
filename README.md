@@ -26,7 +26,7 @@
 | :---: | :---: | :---: |
 | <img src="https://github.com/user-attachments/assets/cd3afbd5-2e74-46e8-ac1f-d72a5dfd4087" width="240" alt="Server List" /> | <img src="https://github.com/user-attachments/assets/02cf8f98-6cbf-47f5-b3a5-2701edd8f8f1" width="240" alt="Resources" /> | <img src="https://github.com/user-attachments/assets/e932b2bc-f1cc-4d63-b4e7-fa526efc13bc" width="240" alt="Processes" /> |
 
-| SSH Terminal | Docker Management | Cron Jobs |
+| SSH Terminal | Docker Management | System Management|
 | :---: | :---: | :---: |
 | <img src="https://github.com/user-attachments/assets/678767aa-0563-4f42-b7b7-5022854b3f1a" width="240" alt="Terminal" /> | <img src="https://github.com/user-attachments/assets/9b4d5e04-88e6-467e-9870-7a0e9dc8e944" width="240" alt="Docker Containers" /> | <img alt="powermenu" src="https://github.com/user-attachments/assets/a3532208-2ef7-47dd-876b-49746b670ff3" width="240" /><br /> <img src="https://github.com/user-attachments/assets/2c4d3173-9511-4823-bccf-7eda1af6f127" width="240" alt="System Control" /> |
 
