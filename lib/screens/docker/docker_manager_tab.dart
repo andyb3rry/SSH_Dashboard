@@ -292,6 +292,7 @@ class _DockerLogsSheetState extends State<_DockerLogsSheet> {
   String _logs = 'Loading logs...';
   bool _loading = true;
   double _fontSize = 12.0;
+  final ScrollController _logsScrollController = ScrollController();
 
   @override
   void initState() {
@@ -310,7 +311,22 @@ class _DockerLogsSheetState extends State<_DockerLogsSheet> {
         _logs = text.isEmpty ? 'No logs available for this container.' : text;
         _loading = false;
       });
+      _scrollToBottom();
     }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_logsScrollController.hasClients) {
+        _logsScrollController.jumpTo(_logsScrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _logsScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -383,6 +399,7 @@ class _DockerLogsSheetState extends State<_DockerLogsSheet> {
                       border: Border.all(color: AppTheme.cardBorder),
                     ),
                     child: SingleChildScrollView(
+                      controller: _logsScrollController,
                       child: SelectableText(
                         _logs,
                         style: GoogleFonts.jetBrainsMono(

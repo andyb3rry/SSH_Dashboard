@@ -18,6 +18,21 @@ class PowerControlTab extends StatefulWidget {
 class _PowerControlTabState extends State<PowerControlTab> {
   bool _isUpdating = false;
   String _updateLogs = '';
+  final ScrollController _updateLogsScrollController = ScrollController();
+
+  void _scrollUpdateLogsToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_updateLogsScrollController.hasClients) {
+        _updateLogsScrollController.jumpTo(_updateLogsScrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _updateLogsScrollController.dispose();
+    super.dispose();
+  }
 
   void _confirmPowerAction(BuildContext context, {required bool isReboot}) {
     final provider = Provider.of<ServerProvider>(context, listen: false);
@@ -255,6 +270,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
                     _isUpdating = true;
                     _updateLogs = '🚀 Starting Linux system update via sudo -S...\nRunning command: $command\n\n';
                   });
+                  _scrollUpdateLogsToBottom();
 
                   try {
                     final output = await provider.executeSudoCommand(command, pwd);
@@ -263,6 +279,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
                         _updateLogs += '$output\n\n✅ Update completed successfully!';
                         _isUpdating = false;
                       });
+                      _scrollUpdateLogsToBottom();
                     }
                   } catch (e) {
                     if (mounted) {
@@ -270,6 +287,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
                         _updateLogs += '\n❌ Error during update:\n$e';
                         _isUpdating = false;
                       });
+                      _scrollUpdateLogsToBottom();
                     }
                   }
                 },
@@ -449,6 +467,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
                 border: Border.all(color: AppTheme.cardBorder),
               ),
               child: SingleChildScrollView(
+                controller: _updateLogsScrollController,
                 child: SelectableText(
                   _updateLogs,
                   style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),

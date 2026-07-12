@@ -23,6 +23,15 @@ class _CronManagerSectionState extends State<CronManagerSection> {
   String? _activeExecutionOutput;
   bool _isExecutingNow = false;
   int _logDaysFilter = 7;
+  final ScrollController _execScrollController = ScrollController();
+
+  void _scrollExecToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_execScrollController.hasClients) {
+        _execScrollController.jumpTo(_execScrollController.position.maxScrollExtent);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -430,6 +439,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
       _isExecutingNow = true;
       _activeExecutionOutput = '⚡ Running job immediately via SSH...\nCommand: ${job.command}\n\n';
     });
+    _scrollExecToBottom();
 
     try {
       String output = '';
@@ -453,6 +463,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
               '${_activeExecutionOutput!}$output\n\n✅ Completed successfully at ${TimeOfDay.now().format(context)}!';
           _isExecutingNow = false;
         });
+        _scrollExecToBottom();
       }
     } catch (e) {
       if (mounted) {
@@ -460,6 +471,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
           _activeExecutionOutput = '${_activeExecutionOutput!}\n❌ Error during execution:\n$e';
           _isExecutingNow = false;
         });
+        _scrollExecToBottom();
       }
     }
   }
@@ -1020,12 +1032,18 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                SelectableText(
-                  _activeExecutionOutput!,
-                  style: GoogleFonts.jetBrainsMono(
-                    color: _isExecutingNow ? AppTheme.amber : AppTheme.emerald,
-                    fontSize: 12,
-                    height: 1.4,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: SingleChildScrollView(
+                    controller: _execScrollController,
+                    child: SelectableText(
+                      _activeExecutionOutput!,
+                      style: GoogleFonts.jetBrainsMono(
+                        color: _isExecutingNow ? AppTheme.amber : AppTheme.emerald,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
                   ),
                 ),
               ],
