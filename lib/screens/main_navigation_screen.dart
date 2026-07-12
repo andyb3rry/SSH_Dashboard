@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -482,14 +483,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
           const SizedBox(width: 4),
         ],
       ),
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: (idx) => setState(() => _currentIndex = idx),
-        children: _tabs,
+      body: Stack(
+        children: [
+          PageView(
+            controller: _pageController,
+            onPageChanged: (idx) => setState(() => _currentIndex = idx),
+            children: _tabs,
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _buildFloatingBottomBar(isConnected, floatingBarSideMargin, floatingBarBottomMargin),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: const SizedBox.shrink(), // Gestiamo il FAB nella bottom bar custom
-      bottomNavigationBar: _buildFloatingBottomBar(isConnected, floatingBarSideMargin, floatingBarBottomMargin),
     );
   }
 
@@ -523,16 +533,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 notchRadius: notchRadius,
                 cornerRadius: barRadius,
               ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceDark,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceDark.withValues(alpha: 0.28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -547,7 +560,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
               painter: _NotchedBarBorderPainter(
                 notchRadius: notchRadius,
                 cornerRadius: barRadius,
-                borderColor: AppTheme.cardBorder,
+                borderColor: AppTheme.neonCyan.withValues(alpha: 0.45),
               ),
             ),
           ),

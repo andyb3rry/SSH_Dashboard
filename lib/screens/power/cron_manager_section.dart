@@ -928,7 +928,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Root crontab is read-only for security reasons. You can edit or delete them in the terminal',
+                    'Root crontab is read-only for security reasons. You can edit or delete them in the terminal.',
                     style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12.5),
                   ),
                 ),
