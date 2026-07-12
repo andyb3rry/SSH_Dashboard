@@ -137,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             const Icon(Icons.warning_amber_rounded, color: AppTheme.amber),
             const SizedBox(width: 10),
-            Text('Reset Host Fingerprints?', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18)),
+            Expanded(child: Text('Reset Host Fingerprints?', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18), overflow: TextOverflow.ellipsis)),
           ],
         ),
         content: Text(
@@ -181,7 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             const Icon(Icons.settings, color: AppTheme.neonCyan),
             const SizedBox(width: 10),
-            Text('Application Settings', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            Expanded(child: Text('Application Settings', style: GoogleFonts.outfit(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
           ],
         ),
       ),

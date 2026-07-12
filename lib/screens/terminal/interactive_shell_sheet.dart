@@ -170,15 +170,19 @@ class _InteractiveShellSheetState extends State<InteractiveShellSheet> {
           children: [
             const Icon(Icons.terminal, color: AppTheme.neonCyan),
             const SizedBox(width: 10),
-            Text(
-              'Terminal: ${provider.activeProfile?.name ?? "SSH Shell"}',
-              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                'Terminal: ${provider.activeProfile?.name ?? "SSH Shell"}',
+                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.zoom_out, color: Colors.white70, size: 20),
+            icon: const Icon(Icons.zoom_out, color: AppTheme.neonCyan, size: 20),
             tooltip: 'Decrease Font Size',
             onPressed: () {
               if (_fontSize > 10) {

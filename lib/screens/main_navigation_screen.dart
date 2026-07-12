@@ -411,8 +411,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     final provider = Provider.of<ServerProvider>(context);
     final isConnected = provider.status == ConnectionStatus.connected;
 
+    // Altezza della bottom bar floating (bar + margini) per il padding del body
+    const double floatingBarBottomMargin = 16.0;
+    const double floatingBarSideMargin = 16.0;
+
     return Scaffold(
-      extendBody: false,
+      extendBody: true,
       appBar: AppBar(
         title: Row(
           children: [
@@ -484,35 +488,128 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         children: _tabs,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'main_nav_fab',
-        backgroundColor: isConnected ? AppTheme.neonCyan : AppTheme.cardBorder,
-        foregroundColor: isConnected ? AppTheme.obsidian : Colors.white38,
-        elevation: isConnected ? 8 : 2,
-        onPressed: _openTerminal,
-        tooltip: 'Open Terminal Shell (xterm)',
-        child: const Icon(Icons.terminal, size: 28),
+      floatingActionButton: const SizedBox.shrink(), // Gestiamo il FAB nella bottom bar custom
+      bottomNavigationBar: _buildFloatingBottomBar(isConnected, floatingBarSideMargin, floatingBarBottomMargin),
+    );
+  }
+
+  Widget _buildFloatingBottomBar(bool isConnected, double sideMargin, double bottomMargin) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    const double barHeight = 64.0;
+    const double fabSize = 56.0;
+    const double notchRadius = 36.0; // Raggio dell'incavo (FAB size/2 + margine)
+    const double barRadius = 20.0;
+    // Quanto il FAB sporge sopra la barra
+    const double fabOverhang = fabSize / 2;
+
+    return Container(
+      // Altezza totale: barra + sporgenza FAB sopra + margine sotto + safe area
+      height: barHeight + fabOverhang + bottomMargin + bottomPadding,
+      margin: EdgeInsets.only(
+        left: sideMargin,
+        right: sideMargin,
       ),
-      bottomNavigationBar: BottomAppBar(
-        color: AppTheme.surfaceDark,
-        //shape: const CircularNotchedRectangle(),
-        shape: AutomaticNotchedShape(
-          const ContinuousRectangleBorder(), // Forma della BottomAppBar (rettangolo standard)
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), // Forma esatta del tuo FAB
-        ),
-        notchMargin: 8.0,
-        elevation: 16,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Resources', idx: 0),
-            _buildNavItem(icon: Icons.apps_outlined, activeIcon: Icons.apps, label: 'Docker', idx: 1),
-            const SizedBox(width: 48), // Spazio centrale al largo dell'incavo tondo per il FAB
-            _buildNavItem(icon: Icons.power_settings_new_outlined, activeIcon: Icons.power_settings_new, label: 'System', idx: 2),
-            _buildNavItem(icon: Icons.storage_outlined, activeIcon: Icons.storage, label: 'Servers', idx: 3),
-          ],
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Barra con incavo trasparente (clippath)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: bottomMargin + bottomPadding,
+            height: barHeight,
+            child: ClipPath(
+              clipper: _NotchedBarClipper(
+                notchRadius: notchRadius,
+                cornerRadius: barRadius,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceDark,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Bordo decorativo (segue la forma del clip)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: bottomMargin + bottomPadding,
+            height: barHeight,
+            child: CustomPaint(
+              painter: _NotchedBarBorderPainter(
+                notchRadius: notchRadius,
+                cornerRadius: barRadius,
+                borderColor: AppTheme.cardBorder,
+              ),
+            ),
+          ),
+          // Icone di navigazione
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: bottomMargin + bottomPadding,
+            height: barHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Resources', idx: 0),
+                  _buildNavItem(icon: Icons.apps_outlined, activeIcon: Icons.apps, label: 'Docker', idx: 1),
+                  SizedBox(width: notchRadius * 2), // Spazio per l'incavo
+                  _buildNavItem(icon: Icons.power_settings_new_outlined, activeIcon: Icons.power_settings_new, label: 'System', idx: 2),
+                  _buildNavItem(icon: Icons.storage_outlined, activeIcon: Icons.storage, label: 'Servers', idx: 3),
+                ],
+              ),
+            ),
+          ),
+          // FAB terminale centrato sull'incavo
+          Positioned(
+            bottom: bottomMargin + bottomPadding + barHeight - fabOverhang,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: _openTerminal,
+                child: Container(
+                  width: fabSize,
+                  height: fabSize,
+                  decoration: BoxDecoration(
+                    color: isConnected ? AppTheme.neonCyan : AppTheme.cardBorder,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: isConnected
+                        ? [
+                            BoxShadow(
+                              color: AppTheme.neonCyan.withValues(alpha: 0.4),
+                              blurRadius: 12,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 6,
+                            ),
+                          ],
+                  ),
+                  child: Icon(
+                    Icons.terminal,
+                    size: 28,
+                    color: isConnected ? AppTheme.obsidian : Colors.white38,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -566,3 +663,164 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   }
 }
 
+/// Clipper personalizzato per la barra con incavo rettangolare arrotondato (matching il FAB) trasparente al centro.
+class _NotchedBarClipper extends CustomClipper<Path> {
+  final double notchRadius;
+  final double cornerRadius;
+
+  _NotchedBarClipper({
+    required this.notchRadius,
+    required this.cornerRadius,
+  });
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    final centerX = size.width / 2;
+    // Dimensioni dell'incavo: larghezza e altezza del FAB + margine
+    const double fabSize = 56.0;
+    const double notchMargin = 8.0;
+    const double fabBorderRadius = 16.0;
+    final double notchWidth = fabSize + notchMargin * 2;
+    final double notchHeight = fabSize / 2 + notchMargin; // Metà FAB sporge sopra
+    final double notchLeft = centerX - notchWidth / 2;
+    final double notchRight = centerX + notchWidth / 2;
+    // Raggio delle curve di raccordo (ingresso/uscita dell'incavo)
+    const double blendRadius = 12.0;
+
+    // Angolo superiore sinistro
+    path.moveTo(0, cornerRadius);
+    path.quadraticBezierTo(0, 0, cornerRadius, 0);
+
+    // Linea superiore sinistra → ingresso incavo
+    path.lineTo(notchLeft - blendRadius, 0);
+
+    // Curva di ingresso (da piano a verticale)
+    path.cubicTo(
+      notchLeft - blendRadius / 2, 0,
+      notchLeft, blendRadius / 2,
+      notchLeft, blendRadius,
+    );
+
+    // Lato sinistro dell'incavo (verso il basso)
+    path.lineTo(notchLeft, notchHeight - fabBorderRadius);
+
+    // Angolo inferiore sinistro dell'incavo (arrotondato come il FAB)
+    path.quadraticBezierTo(
+      notchLeft, notchHeight,
+      notchLeft + fabBorderRadius, notchHeight,
+    );
+
+    // Fondo dell'incavo
+    path.lineTo(notchRight - fabBorderRadius, notchHeight);
+
+    // Angolo inferiore destro dell'incavo (arrotondato come il FAB)
+    path.quadraticBezierTo(
+      notchRight, notchHeight,
+      notchRight, notchHeight - fabBorderRadius,
+    );
+
+    // Lato destro dell'incavo (verso l'alto)
+    path.lineTo(notchRight, blendRadius);
+
+    // Curva di uscita (da verticale a piano)
+    path.cubicTo(
+      notchRight, blendRadius / 2,
+      notchRight + blendRadius / 2, 0,
+      notchRight + blendRadius, 0,
+    );
+
+    // Linea superiore destra
+    path.lineTo(size.width - cornerRadius, 0);
+    path.quadraticBezierTo(size.width, 0, size.width, cornerRadius);
+
+    // Lato destro
+    path.lineTo(size.width, size.height - cornerRadius);
+    path.quadraticBezierTo(size.width, size.height, size.width - cornerRadius, size.height);
+
+    // Fondo
+    path.lineTo(cornerRadius, size.height);
+    path.quadraticBezierTo(0, size.height, 0, size.height - cornerRadius);
+
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _NotchedBarClipper oldClipper) {
+    return oldClipper.notchRadius != notchRadius || oldClipper.cornerRadius != cornerRadius;
+  }
+}
+
+/// Painter per il bordo decorativo che segue la stessa forma dell'incavo.
+class _NotchedBarBorderPainter extends CustomPainter {
+  final double notchRadius;
+  final double cornerRadius;
+  final Color borderColor;
+
+  _NotchedBarBorderPainter({
+    required this.notchRadius,
+    required this.cornerRadius,
+    required this.borderColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final centerX = size.width / 2;
+    const double fabSize = 56.0;
+    const double notchMargin = 8.0;
+    const double fabBorderRadius = 16.0;
+    final double notchWidth = fabSize + notchMargin * 2;
+    final double notchHeight = fabSize / 2 + notchMargin;
+    final double notchLeft = centerX - notchWidth / 2;
+    final double notchRight = centerX + notchWidth / 2;
+    const double blendRadius = 12.0;
+
+    path.moveTo(0, cornerRadius);
+    path.quadraticBezierTo(0, 0, cornerRadius, 0);
+    path.lineTo(notchLeft - blendRadius, 0);
+    path.cubicTo(
+      notchLeft - blendRadius / 2, 0,
+      notchLeft, blendRadius / 2,
+      notchLeft, blendRadius,
+    );
+    path.lineTo(notchLeft, notchHeight - fabBorderRadius);
+    path.quadraticBezierTo(
+      notchLeft, notchHeight,
+      notchLeft + fabBorderRadius, notchHeight,
+    );
+    path.lineTo(notchRight - fabBorderRadius, notchHeight);
+    path.quadraticBezierTo(
+      notchRight, notchHeight,
+      notchRight, notchHeight - fabBorderRadius,
+    );
+    path.lineTo(notchRight, blendRadius);
+    path.cubicTo(
+      notchRight, blendRadius / 2,
+      notchRight + blendRadius / 2, 0,
+      notchRight + blendRadius, 0,
+    );
+    path.lineTo(size.width - cornerRadius, 0);
+    path.quadraticBezierTo(size.width, 0, size.width, cornerRadius);
+    path.lineTo(size.width, size.height - cornerRadius);
+    path.quadraticBezierTo(size.width, size.height, size.width - cornerRadius, size.height);
+    path.lineTo(cornerRadius, size.height);
+    path.quadraticBezierTo(0, size.height, 0, size.height - cornerRadius);
+    path.close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _NotchedBarBorderPainter oldDelegate) {
+    return oldDelegate.notchRadius != notchRadius ||
+        oldDelegate.cornerRadius != cornerRadius ||
+        oldDelegate.borderColor != borderColor;
+  }
+}

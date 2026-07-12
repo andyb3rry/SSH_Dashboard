@@ -176,13 +176,16 @@ class _ServerListScreenState extends State<ServerListScreen> {
               title: const Text('Select Server Profile'),
             )
           : null,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'server_list_fab',
-        backgroundColor: AppTheme.neonCyan,
-        foregroundColor: AppTheme.obsidian,
-        onPressed: () => _openForm(context),
-        icon: const Icon(Icons.add),
-        label: Text('Add Server', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 100),
+        child: FloatingActionButton.extended(
+          heroTag: 'server_list_fab',
+          backgroundColor: AppTheme.neonCyan,
+          foregroundColor: AppTheme.obsidian,
+          onPressed: () => _openForm(context),
+          icon: const Icon(Icons.add),
+          label: Text('Add Server', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        ),
       ),
       body: Column(
         children: [
@@ -236,7 +239,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
               ),
             )
           : ListView.builder(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: widget.isModalSelection ? 16 : 150),
+              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: widget.isModalSelection ? 16 : 180),
               itemCount: provider.profiles.length,
               itemBuilder: (ctx, idx) {
                 final profile = provider.profiles[idx];
