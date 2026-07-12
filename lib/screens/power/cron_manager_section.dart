@@ -122,6 +122,40 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     return res;
   }
 
+  /// Estimate the minimum interval in days between executions for a given cron schedule.
+  /// Returns 0 for sub-daily schedules, 1 for daily, 7 for weekly, 30 for monthly, etc.
+  int _estimateScheduleIntervalDays(String schedule) {
+    if (schedule.startsWith('@')) {
+      switch (schedule) {
+        case '@reboot': return 0;
+        case '@hourly': return 0;
+        case '@daily': case '@midnight': return 1;
+        case '@weekly': return 7;
+        case '@monthly': return 30;
+        case '@yearly': case '@annually': return 365;
+        default: return 0;
+      }
+    }
+    final parts = schedule.split(RegExp(r'\s+'));
+    if (parts.length != 5) return 0;
+    final minPart = parts[0];
+    final hrPart = parts[1];
+    final dayPart = parts[2];
+    final monthPart = parts[3];
+    final dowPart = parts[4];
+
+    // Yearly: specific month and day
+    if (monthPart != '*' && dayPart != '*') return 365;
+    // Monthly: specific day of month
+    if (dayPart != '*' && monthPart == '*' && dowPart == '*') return 30;
+    // Weekly: specific day of week
+    if (dowPart != '*' && dayPart == '*') return 7;
+    // Daily: specific hour and minute
+    if (hrPart != '*' && !hrPart.startsWith('*/') && minPart != '*') return 1;
+    // Sub-daily
+    return 0;
+  }
+
   Future<void> _fetchCronJobs() async {
     final provider = Provider.of<ServerProvider>(context, listen: false);
     if (!provider.isConnected) return;
@@ -135,7 +169,23 @@ class _CronManagerSectionState extends State<CronManagerSection> {
       String crontabText = '';
       String logsText = '';
 
-      // Fetch both crontab and up to 3000 lines of system logs covering up to _logDaysFilter days
+      // Determine the username for pre-filtering logs (reduces noise from other users' jobs)
+      String currentUser = '';
+      if (!_isRootTab) {
+        try {
+          currentUser = (await provider.executeCommand('whoami')).trim();
+        } catch (_) {}
+      }
+
+      // Build a user-aware log fetch command:
+      // 1) Try journalctl first (filtered by user if non-root)
+      // 2) Fall back to grepping syslog/cron.log (also filtered by user if non-root)
+      // 3) Increased limit from 2500 to 5000 lines to catch infrequent jobs
+      final String daysAgo = _logDaysFilter == 1 ? '1 day' : '$_logDaysFilter days';
+      final String userGrepFilter = (currentUser.isNotEmpty && !_isRootTab)
+          ? ' | grep -i "\\($currentUser\\)"'
+          : '';
+
       if (_isRootTab) {
         final sudoPwd = await _getSudoPassword(context, forceConfirmation: false, actionName: 'Read Root Crontab');
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
@@ -144,15 +194,97 @@ class _CronManagerSectionState extends State<CronManagerSection> {
         }
         crontabText = await provider.executeSudoCommand('crontab -l 2>/dev/null || true', sudoPwd ?? '');
         logsText = await provider.executeSudoCommand(
-            'logs=\$(timeout 6s journalctl -u cron -u crond --since "${_logDaysFilter == 1 ? "1 day" : "$_logDaysFilter days"} ago" --no-pager -n 2500 2>/dev/null); if [ -z "\$logs" ]; then logs=\$(grep -h -i -E "cron|CRON" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 2500); fi; echo "\$logs"',
+            'logs=\$(timeout 8s journalctl -u cron -u crond --since "$daysAgo ago" --no-pager -n 5000 2>/dev/null | grep -i "CRON\\|CMD"); if [ -z "\$logs" ]; then logs=\$(grep -h -i -E "CRON|CMD" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 5000); fi; echo "\$logs"',
             sudoPwd ?? '');
       } else {
         crontabText = await provider.executeCommand('crontab -l 2>/dev/null || true');
         logsText = await provider.executeCommand(
-            'logs=\$(timeout 6s journalctl --user -u cron --since "${_logDaysFilter == 1 ? "1 day" : "$_logDaysFilter days"} ago" --no-pager -n 2500 2>/dev/null); if [ -z "\$logs" ]; then logs=\$(timeout 6s journalctl -u cron -u crond --since "${_logDaysFilter == 1 ? "1 day" : "$_logDaysFilter days"} ago" --no-pager -n 2500 2>/dev/null); fi; if [ -z "\$logs" ]; then logs=\$(grep -h -i -E "cron|CRON" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 2500); fi; echo "\$logs"');
+            'logs=\$(timeout 8s journalctl -u cron -u crond --since "$daysAgo ago" --no-pager -n 5000 2>/dev/null$userGrepFilter); '
+            'if [ -z "\$logs" ]; then logs=\$(timeout 8s journalctl --user -u cron --since "$daysAgo ago" --no-pager -n 5000 2>/dev/null); fi; '
+            'if [ -z "\$logs" ]; then logs=\$(grep -h -i -E "CRON|CMD" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null$userGrepFilter | tail -n 5000); fi; '
+            'echo "\$logs"');
       }
 
       final parsedJobs = _parseCrontab(crontabText, logsText, _isRootTab);
+
+      // Secondary targeted search for infrequent jobs that weren't found in the bulk log
+      // This runs individual grep commands targeting each job's unique tokens
+      final jobsNeedingSearch = <int>[];
+      for (int i = 0; i < parsedJobs.length; i++) {
+        if (parsedJobs[i].lastExecutionLog == null) {
+          final intervalDays = _estimateScheduleIntervalDays(parsedJobs[i].schedule);
+          // Only do the extra search for jobs that run less frequently than daily
+          // and whose expected interval falls within a reasonable extended window
+          if (intervalDays >= 1 && intervalDays <= 400) {
+            jobsNeedingSearch.add(i);
+          }
+        }
+      }
+
+      if (jobsNeedingSearch.isNotEmpty && mounted) {
+        // Use an extended search window: max of _logDaysFilter and twice the job interval (capped at 90 days)
+        for (final idx in jobsNeedingSearch) {
+          final job = parsedJobs[idx];
+          final intervalDays = _estimateScheduleIntervalDays(job.schedule);
+          final searchDays = [_logDaysFilter, (intervalDays * 2).clamp(1, 90)].reduce((a, b) => a > b ? a : b);
+          final searchDaysAgo = searchDays == 1 ? '1 day' : '$searchDays days';
+
+          // Extract a distinctive search token from the command
+          final uniqueTokens = _extractUniqueTokens(job.command);
+          if (uniqueTokens.isEmpty) continue;
+
+          // Use the most distinctive token (longest one) for grep
+          uniqueTokens.sort((a, b) => b.length.compareTo(a.length));
+          final searchToken = uniqueTokens.first;
+
+          try {
+            String targetedLog = '';
+            final grepPattern = searchToken.replaceAll(RegExp(r'[^a-zA-Z0-9_./-]'), '.');
+            if (_isRootTab) {
+              final sudoPwd = provider.activeProfile?.password ?? '';
+              targetedLog = await provider.executeSudoCommand(
+                  'timeout 5s journalctl -u cron -u crond --since "$searchDaysAgo ago" --no-pager 2>/dev/null '
+                  '| grep -i "$grepPattern" | tail -n 5; '
+                  'if [ \$? -ne 0 ]; then grep -h -i "$grepPattern" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 5; fi',
+                  sudoPwd);
+            } else {
+              targetedLog = await provider.executeCommand(
+                  'timeout 5s journalctl -u cron -u crond --since "$searchDaysAgo ago" --no-pager 2>/dev/null '
+                  '| grep -i "$grepPattern" | tail -n 5; '
+                  'if [ \$? -ne 0 ]; then grep -h -i "$grepPattern" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 5; fi');
+            }
+
+            if (targetedLog.trim().isNotEmpty) {
+              final targetedLines = targetedLog.split('\n');
+              for (int i = targetedLines.length - 1; i >= 0; i--) {
+                final l = targetedLines[i];
+                if (_matchLogToCommand(l, job.command)) {
+                  final match = RegExp(r'\s+(CRON|cron|crond|CMD)\b').firstMatch(l);
+                  String? foundLog;
+                  if (match != null && match.start > 0) {
+                    foundLog = l.substring(0, match.start).trim();
+                  } else {
+                    foundLog = l.trim();
+                  }
+                  if (foundLog.isNotEmpty) {
+                    parsedJobs[idx] = CronJob(
+                      rawLine: job.rawLine,
+                      schedule: job.schedule,
+                      command: job.command,
+                      lastExecutionLog: foundLog,
+                      isRoot: job.isRoot,
+                    );
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (_) {
+            // Targeted search failed silently — the job keeps its "not found" status
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _jobs = parsedJobs;
@@ -817,6 +949,8 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                     _logFilterChip('Last 2 Weeks', 14),
                     const SizedBox(width: 6),
                     _logFilterChip('This Month', 30),
+                    const SizedBox(width: 6),
+                    _logFilterChip('3 Months', 90),
                   ],
                 ),
               ),
@@ -1022,7 +1156,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                             child: Text(
                               job.lastExecutionLog != null
                                   ? 'Last run: ${job.lastExecutionLog}'
-                                  : 'No recent execution found in system logs for this command in the last ${_logDaysFilter == 1 ? "1 day" : "$_logDaysFilter days"}.',
+                                  : 'No recent execution found in system logs for this command in the last ${_logDaysFilter == 1 ? "1 day" : "$_logDaysFilter days"}.${_estimateScheduleIntervalDays(job.schedule) > _logDaysFilter ? " (This job runs ${job.humanReadableSchedule.toLowerCase()} — try a wider log window)" : ""}',
                               style: GoogleFonts.outfit(
                                 color: job.lastExecutionLog != null ? AppTheme.emerald : Colors.white54,
                                 fontSize: 12,
