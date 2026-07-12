@@ -176,121 +176,79 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
     try {
       String crontabText = '';
-      String logsText = '';
+      String? sudoPwd;
 
-      // Determine the username for pre-filtering logs (reduces noise from other users' jobs)
-      String currentUser = '';
-      if (!_isRootTab) {
-        try {
-          currentUser = (await provider.executeCommand('whoami')).trim();
-        } catch (_) {}
-      }
-
-      // Build a user-aware log fetch command:
-      // 1) Try journalctl first (filtered by user if non-root)
-      // 2) Fall back to grepping syslog/cron.log (also filtered by user if non-root)
-      // 3) Increased limit from 2500 to 5000 lines to catch infrequent jobs
-      final String daysAgo = _logDaysFilter == 1 ? '1 day' : '$_logDaysFilter days';
-      final String userGrepFilter = (currentUser.isNotEmpty && !_isRootTab)
-          ? ' | grep -i "\\($currentUser\\)"'
-          : '';
-
+      // Step 1: Fetch crontab only (no bulk log fetch needed)
       if (_isRootTab) {
-        final sudoPwd = await _getSudoPassword(context, forceConfirmation: false, actionName: 'Read Root Crontab');
+        sudoPwd = await _getSudoPassword(context, forceConfirmation: false, actionName: 'Read Root Crontab');
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() => _isLoading = false);
           return;
         }
         crontabText = await provider.executeSudoCommand('crontab -l 2>/dev/null || true', sudoPwd ?? '');
-        logsText = await provider.executeSudoCommand(
-            'logs=\$(timeout 8s journalctl -u cron -u crond --since "$daysAgo ago" --no-pager -n 5000 2>/dev/null | grep -i "CRON\\|CMD"); if [ -z "\$logs" ]; then logs=\$(grep -h -i -E "CRON|CMD" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 5000); fi; echo "\$logs"',
-            sudoPwd ?? '');
       } else {
         crontabText = await provider.executeCommand('crontab -l 2>/dev/null || true');
-        logsText = await provider.executeCommand(
-            'logs=\$(timeout 8s journalctl -u cron -u crond --since "$daysAgo ago" --no-pager -n 5000 2>/dev/null$userGrepFilter); '
-            'if [ -z "\$logs" ]; then logs=\$(timeout 8s journalctl --user -u cron --since "$daysAgo ago" --no-pager -n 5000 2>/dev/null); fi; '
-            'if [ -z "\$logs" ]; then logs=\$(grep -h -i -E "CRON|CMD" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null$userGrepFilter | tail -n 5000); fi; '
-            'echo "\$logs"');
       }
 
-      final parsedJobs = _parseCrontab(crontabText, logsText, _isRootTab);
+      // Step 2: Parse crontab entries (without logs)
+      final parsedJobs = _parseCrontab(crontabText, _isRootTab);
 
-      // Secondary targeted search for infrequent jobs that weren't found in the bulk log
-      // This runs individual grep commands targeting each job's unique tokens
-      final jobsNeedingSearch = <int>[];
-      for (int i = 0; i < parsedJobs.length; i++) {
-        if (parsedJobs[i].lastExecutionLog == null) {
-          final intervalDays = _estimateScheduleIntervalDays(parsedJobs[i].schedule);
-          // Only do the extra search for jobs that run less frequently than daily
-          // and whose expected interval falls within a reasonable extended window
-          if (intervalDays >= 1 && intervalDays <= 400) {
-            jobsNeedingSearch.add(i);
+      // Step 3: Per-job targeted log search using unique command tokens.
+      // Each job gets its own grep against journalctl/syslog, strictly within _logDaysFilter.
+      // This avoids the old approach of fetching thousands of bulk log lines.
+      final String daysAgo = _logDaysFilter == 1 ? '1 day' : '$_logDaysFilter days';
+
+      for (int idx = 0; idx < parsedJobs.length; idx++) {
+        if (!mounted) break;
+        final job = parsedJobs[idx];
+
+        // Skip @reboot jobs — they don't produce periodic log entries
+        if (job.schedule == '@reboot') continue;
+
+        final uniqueTokens = _extractUniqueTokens(job.command);
+        if (uniqueTokens.isEmpty) continue;
+
+        // Use the most distinctive token (longest) for grep
+        uniqueTokens.sort((a, b) => b.length.compareTo(a.length));
+        final grepPattern = uniqueTokens.first.replaceAll(RegExp(r'[^a-zA-Z0-9_./-]'), '.');
+
+        try {
+          String targetedLog = '';
+          // Search journalctl first, fall back to syslog/cron.log files
+          final searchCmd =
+              'line=\$(timeout 4s journalctl -u cron -u crond --since "$daysAgo ago" --no-pager 2>/dev/null '
+              '| grep -i "$grepPattern" | tail -n 1); '
+              'if [ -z "\$line" ]; then '
+              'line=\$(grep -h -i "$grepPattern" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 1); '
+              'fi; echo "\$line"';
+
+          if (_isRootTab) {
+            targetedLog = await provider.executeSudoCommand(searchCmd, sudoPwd ?? '');
+          } else {
+            targetedLog = await provider.executeCommand(searchCmd);
           }
-        }
-      }
 
-      if (jobsNeedingSearch.isNotEmpty && mounted) {
-        // Use an extended search window: max of _logDaysFilter and twice the job interval (capped at 90 days)
-        for (final idx in jobsNeedingSearch) {
-          final job = parsedJobs[idx];
-          final intervalDays = _estimateScheduleIntervalDays(job.schedule);
-          final searchDays = [_logDaysFilter, (intervalDays * 2).clamp(1, 90)].reduce((a, b) => a > b ? a : b);
-          final searchDaysAgo = searchDays == 1 ? '1 day' : '$searchDays days';
-
-          // Extract a distinctive search token from the command
-          final uniqueTokens = _extractUniqueTokens(job.command);
-          if (uniqueTokens.isEmpty) continue;
-
-          // Use the most distinctive token (longest one) for grep
-          uniqueTokens.sort((a, b) => b.length.compareTo(a.length));
-          final searchToken = uniqueTokens.first;
-
-          try {
-            String targetedLog = '';
-            final grepPattern = searchToken.replaceAll(RegExp(r'[^a-zA-Z0-9_./-]'), '.');
-            if (_isRootTab) {
-              final sudoPwd = provider.activeProfile?.password ?? '';
-              targetedLog = await provider.executeSudoCommand(
-                  'timeout 5s journalctl -u cron -u crond --since "$searchDaysAgo ago" --no-pager 2>/dev/null '
-                  '| grep -i "$grepPattern" | tail -n 5; '
-                  'if [ \$? -ne 0 ]; then grep -h -i "$grepPattern" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 5; fi',
-                  sudoPwd);
+          final trimmed = targetedLog.trim();
+          if (trimmed.isNotEmpty && _matchLogToCommand(trimmed, job.command)) {
+            final match = RegExp(r'\s+(CRON|cron|crond|CMD)\b').firstMatch(trimmed);
+            String? foundLog;
+            if (match != null && match.start > 0) {
+              foundLog = trimmed.substring(0, match.start).trim();
             } else {
-              targetedLog = await provider.executeCommand(
-                  'timeout 5s journalctl -u cron -u crond --since "$searchDaysAgo ago" --no-pager 2>/dev/null '
-                  '| grep -i "$grepPattern" | tail -n 5; '
-                  'if [ \$? -ne 0 ]; then grep -h -i "$grepPattern" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 5; fi');
+              foundLog = trimmed;
             }
-
-            if (targetedLog.trim().isNotEmpty) {
-              final targetedLines = targetedLog.split('\n');
-              for (int i = targetedLines.length - 1; i >= 0; i--) {
-                final l = targetedLines[i];
-                if (_matchLogToCommand(l, job.command)) {
-                  final match = RegExp(r'\s+(CRON|cron|crond|CMD)\b').firstMatch(l);
-                  String? foundLog;
-                  if (match != null && match.start > 0) {
-                    foundLog = l.substring(0, match.start).trim();
-                  } else {
-                    foundLog = l.trim();
-                  }
-                  if (foundLog.isNotEmpty) {
-                    parsedJobs[idx] = CronJob(
-                      rawLine: job.rawLine,
-                      schedule: job.schedule,
-                      command: job.command,
-                      lastExecutionLog: foundLog,
-                      isRoot: job.isRoot,
-                    );
-                    break;
-                  }
-                }
-              }
+            if (foundLog.isNotEmpty) {
+              parsedJobs[idx] = CronJob(
+                rawLine: job.rawLine,
+                schedule: job.schedule,
+                command: job.command,
+                lastExecutionLog: foundLog,
+                isRoot: job.isRoot,
+              );
             }
-          } catch (_) {
-            // Targeted search failed silently — the job keeps its "not found" status
           }
+        } catch (_) {
+          // Search failed silently — job keeps "not found" status
         }
       }
 
@@ -310,10 +268,9 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     }
   }
 
-  List<CronJob> _parseCrontab(String crontabOutput, String logsOutput, bool isRoot) {
+  List<CronJob> _parseCrontab(String crontabOutput, bool isRoot) {
     final List<CronJob> result = [];
     final lines = crontabOutput.split('\n');
-    final logLines = logsOutput.split('\n');
 
     for (var raw in lines) {
       final line = raw.trim();
@@ -341,26 +298,11 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
       if (command.isEmpty) continue;
 
-      // Find the most recent execution log for this command using unique token matching
-      String? lastLog;
-      for (int i = logLines.length - 1; i >= 0; i--) {
-        final l = logLines[i];
-        if (_matchLogToCommand(l, command)) {
-          final match = RegExp(r'\s+(CRON|cron|crond|CMD)\b').firstMatch(l);
-          if (match != null && match.start > 0) {
-            lastLog = l.substring(0, match.start).trim();
-          } else {
-            lastLog = l.trim();
-          }
-          break;
-        }
-      }
-
       result.add(CronJob(
         rawLine: line,
         schedule: schedule,
         command: command,
-        lastExecutionLog: lastLog,
+        lastExecutionLog: null,
         isRoot: isRoot,
       ));
     }
@@ -970,6 +912,30 @@ class _CronManagerSectionState extends State<CronManagerSection> {
           ],
         ),
         const SizedBox(height: 14),
+        if (_isRootTab) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              color: AppTheme.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.amber.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.shield_outlined, color: AppTheme.amber, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Root crontab is read-only for security reasons. You can edit or delete them in the terminal',
+                    style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
 
         // Error Box
         if (_errorMessage != null)
@@ -1188,7 +1154,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Actions Bar (Run Now, Edit, Delete)
+                    // Actions Bar (Run Now, Edit, Delete — Edit/Delete only for User crontab)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -1204,17 +1170,19 @@ class _CronManagerSectionState extends State<CronManagerSection> {
                           icon: const Icon(Icons.play_arrow, size: 18),
                           label: Text('Run Now', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: AppTheme.neonPurple, size: 20),
-                          tooltip: 'Edit Job',
-                          onPressed: () => _showAddOrEditJobDialog(jobToEdit: job),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: AppTheme.crimson, size: 20),
-                          tooltip: 'Delete Job',
-                          onPressed: () => _deleteJobFromCrontab(job),
-                        ),
+                        if (!_isRootTab) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: AppTheme.neonPurple, size: 20),
+                            tooltip: 'Edit Job',
+                            onPressed: () => _showAddOrEditJobDialog(jobToEdit: job),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: AppTheme.crimson, size: 20),
+                            tooltip: 'Delete Job',
+                            onPressed: () => _deleteJobFromCrontab(job),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -1224,21 +1192,22 @@ class _CronManagerSectionState extends State<CronManagerSection> {
           ),
         const SizedBox(height: 16),
 
-        // Add Job Button
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.neonPurple,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        // Add Job Button (only for User crontab — root editing disabled for security)
+        if (!_isRootTab)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.neonPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => _showAddOrEditJobDialog(),
+              icon: const Icon(Icons.add_circle_outline),
+              label: Text('Add Job to Crontab (User)', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
             ),
-            onPressed: () => _showAddOrEditJobDialog(),
-            icon: const Icon(Icons.add_circle_outline),
-            label: Text('Add Job to Crontab (${_isRootTab ? "Root" : "User"})', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
           ),
-        ),
         const SizedBox(height: 24),
       ],
     );
