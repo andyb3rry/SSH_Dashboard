@@ -412,9 +412,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     final provider = Provider.of<ServerProvider>(context);
     final isConnected = provider.status == ConnectionStatus.connected;
 
-    // Altezza della bottom bar floating (bar + margini) per il padding del body
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     const double floatingBarBottomMargin = 16.0;
     const double floatingBarSideMargin = 16.0;
+    const double barHeight = 64.0;
+    const double notchRadius = 36.0;
+    const double barRadius = 20.0;
 
     return Scaffold(
       extendBody: true,
@@ -489,6 +492,38 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             controller: _pageController,
             onPageChanged: (idx) => setState(() => _currentIndex = idx),
             children: _tabs,
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 116.0 + bottomPadding,
+            child: IgnorePointer(
+              child: ClipPath(
+                clipper: _BottomBarGradientClipper(
+                  sideMargin: floatingBarSideMargin,
+                  bottomMargin: floatingBarBottomMargin,
+                  bottomPadding: bottomPadding,
+                  barHeight: barHeight,
+                  notchRadius: notchRadius,
+                  cornerRadius: barRadius,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        AppTheme.obsidian.withValues(alpha: 0.65),
+                        AppTheme.obsidian.withValues(alpha: 0.95),
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
           Positioned(
             left: 0,
@@ -762,6 +797,56 @@ class _NotchedBarClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(covariant _NotchedBarClipper oldClipper) {
     return oldClipper.notchRadius != notchRadius || oldClipper.cornerRadius != cornerRadius;
+  }
+}
+
+/// Clipper che ritaglia (sottrae) la forma esatta della bottom bar e dell'incavo
+/// dal rettangolo del gradiente in modo che il gradiente scuro si applichi solo
+/// all'area circostante la barra e non oscuri i colori originali sotto il blur.
+class _BottomBarGradientClipper extends CustomClipper<Path> {
+  final double sideMargin;
+  final double bottomMargin;
+  final double bottomPadding;
+  final double barHeight;
+  final double notchRadius;
+  final double cornerRadius;
+
+  _BottomBarGradientClipper({
+    required this.sideMargin,
+    required this.bottomMargin,
+    required this.bottomPadding,
+    required this.barHeight,
+    required this.notchRadius,
+    required this.cornerRadius,
+  });
+
+  @override
+  Path getClip(Size size) {
+    final fullRectPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final double barWidth = size.width - sideMargin * 2;
+    if (barWidth <= 0 || barHeight <= 0) return fullRectPath;
+
+    final clipper = _NotchedBarClipper(
+      notchRadius: notchRadius,
+      cornerRadius: cornerRadius,
+    );
+    final barShapePath = clipper.getClip(Size(barWidth, barHeight));
+
+    final double barTopY = size.height - (bottomMargin + bottomPadding) - barHeight;
+    final shiftedBarPath = barShapePath.shift(Offset(sideMargin, barTopY));
+
+    return Path.combine(PathOperation.difference, fullRectPath, shiftedBarPath);
+  }
+
+  @override
+  bool shouldReclip(covariant _BottomBarGradientClipper oldClipper) {
+    return oldClipper.sideMargin != sideMargin ||
+        oldClipper.bottomMargin != bottomMargin ||
+        oldClipper.bottomPadding != bottomPadding ||
+        oldClipper.barHeight != barHeight ||
+        oldClipper.notchRadius != notchRadius ||
+        oldClipper.cornerRadius != cornerRadius;
   }
 }
 
