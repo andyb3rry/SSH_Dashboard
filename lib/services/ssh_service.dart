@@ -666,6 +666,72 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
     }
   }
 
+  /// Executes a sudo command with real-time streaming of stdout/stderr via callbacks.
+  /// Used for long-running commands (e.g. system updates) where the UI needs live output.
+  Future<String> executeSudoCommandStreamed(
+    String command,
+    String sudoPassword, {
+    Duration timeout = const Duration(minutes: 10),
+    void Function(String chunk)? onStdout,
+    void Function(String chunk)? onStderr,
+  }) async {
+    if (!isConnected) {
+      throw Exception('SSH client not connected.');
+    }
+    _isBusyWithCommand = true;
+    try {
+      final base64Cmd = base64Encode(utf8.encode(command));
+      final session = await _client!.execute('sudo -S -p \'\' sh 2>&1').timeout(timeout);
+      if (sudoPassword.isNotEmpty) {
+        session.stdin.add(utf8.encode('$sudoPassword\n'));
+      }
+      session.stdin.add(utf8.encode('echo \'$base64Cmd\' | base64 -d | sh\nexit\n'));
+      await session.stdin.close();
+
+      final outputBuffer = StringBuffer();
+      final completer = Completer<String>();
+
+      // Listen to stdout chunks in real time
+      session.stdout.listen(
+        (data) {
+          final chunk = utf8.decode(data, allowMalformed: true);
+          outputBuffer.write(chunk);
+          onStdout?.call(chunk);
+        },
+        onError: (error) {
+          if (!completer.isCompleted) {
+            completer.completeError(error);
+          }
+        },
+      );
+
+      // Listen to stderr chunks in real time
+      session.stderr.listen(
+        (data) {
+          final chunk = utf8.decode(data, allowMalformed: true);
+          onStderr?.call(chunk);
+        },
+      );
+
+      // Wait for session to complete
+      await session.done;
+
+      final result = outputBuffer.toString().trim();
+      if (!completer.isCompleted) {
+        completer.complete(result);
+      }
+
+      return await completer.future.timeout(timeout);
+    } catch (e) {
+      if (_client != null && (_client!.isClosed || e is SocketException || e.toString().contains('closed') || e.toString().contains('Broken pipe') || e.toString().contains('Connection reset'))) {
+        await disconnect();
+      }
+      rethrow;
+    } finally {
+      _isBusyWithCommand = false;
+    }
+  }
+
   Future<void> rebootServer([String? sudoPassword]) async {
     try {
       if (sudoPassword != null && sudoPassword.isNotEmpty) {

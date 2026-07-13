@@ -332,6 +332,39 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<String> executeSudoCommandStreamed(
+    String command,
+    String sudoPassword, {
+    Duration timeout = const Duration(minutes: 10),
+    void Function(String chunk)? onStdout,
+    void Function(String chunk)? onStderr,
+  }) async {
+    if (!_sshService.isConnected && _activeProfile != null) {
+      await _sshService.connect(_activeProfile!);
+    }
+    try {
+      return await _sshService.executeSudoCommandStreamed(
+        command,
+        sudoPassword,
+        timeout: timeout,
+        onStdout: onStdout,
+        onStderr: onStderr,
+      );
+    } catch (e) {
+      if (_activeProfile != null && (e.toString().contains('not connected') || e.toString().contains('closed') || e.toString().contains('Broken pipe') || e.toString().contains('Socket'))) {
+        await _sshService.connect(_activeProfile!);
+        return await _sshService.executeSudoCommandStreamed(
+          command,
+          sudoPassword,
+          timeout: timeout,
+          onStdout: onStdout,
+          onStderr: onStderr,
+        );
+      }
+      rethrow;
+    }
+  }
+
   Future<List<ProcessInfo>> fetchRunningProcesses() async {
     if (_status != ConnectionStatus.connected) return [];
     return await _sshService.fetchRunningProcesses();

@@ -39,7 +39,7 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
 
     if (!isConnected) {
       return const DisconnectedServerView(
-        title: 'Docker Manager Not Accessible',
+        title: 'Docker Manager',
         icon: Icons.view_in_ar_outlined,
         iconColor: AppTheme.neonCyan,
         subtitle: 'Connect to an SSH server to view the full list of Docker containers and execute operational commands.',

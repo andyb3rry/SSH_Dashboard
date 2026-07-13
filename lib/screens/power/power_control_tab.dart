@@ -273,10 +273,29 @@ class _PowerControlTabState extends State<PowerControlTab> {
                   _scrollUpdateLogsToBottom();
 
                   try {
-                    final output = await provider.executeSudoCommand(command, pwd);
+                    await provider.executeSudoCommandStreamed(
+                      command,
+                      pwd,
+                      onStdout: (chunk) {
+                        if (mounted) {
+                          setState(() {
+                            _updateLogs += chunk;
+                          });
+                          _scrollUpdateLogsToBottom();
+                        }
+                      },
+                      onStderr: (chunk) {
+                        if (mounted) {
+                          setState(() {
+                            _updateLogs += chunk;
+                          });
+                          _scrollUpdateLogsToBottom();
+                        }
+                      },
+                    );
                     if (mounted) {
                       setState(() {
-                        _updateLogs += '$output\n\n✅ Update completed successfully!';
+                        _updateLogs += '\n\n✅ Update completed successfully!';
                         _isUpdating = false;
                       });
                       _scrollUpdateLogsToBottom();
@@ -309,10 +328,10 @@ class _PowerControlTabState extends State<PowerControlTab> {
 
     if (!isConnected) {
       return const DisconnectedServerView(
-        title: 'System & Power Actions Disabled',
+        title: 'System Control',
         icon: Icons.bolt_outlined,
         iconColor: AppTheme.amber,
-        subtitle: 'Connect to an SSH server to perform remote reboots, emergency shutdowns, and system updates.',
+        subtitle: 'Connect to an SSH server to perform remote reboots, emergency shutdowns, system updates, and manage cronjobs.',
       );
     }
 

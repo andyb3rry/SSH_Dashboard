@@ -199,4 +199,23 @@ class StorageService {
     }
     return count;
   }
+
+  // --- App Lock Paused-At Persistence ---
+  static const String _pausedAtKey = 'app_lock_paused_at_epoch_ms';
+
+  Future<void> savePausedAtTimestamp(int epochMs) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_pausedAtKey, epochMs);
+  }
+
+  Future<int?> getPausedAtTimestamp() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getInt(_pausedAtKey);
+    return val;
+  }
+
+  Future<void> clearPausedAtTimestamp() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_pausedAtKey);
+  }
 }
