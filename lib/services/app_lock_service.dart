@@ -15,67 +15,58 @@ class AppLockService {
   bool get isUnlocked => _isUnlocked;
   bool get isAuthenticating => _isAuthenticating;
 
-  /// Checks if the lock timeout has expired by reading the persisted paused-at timestamp.
-  /// Returns true if the app should be locked (timeout expired).
-  Future<bool> _hasTimeoutExpired() async {
-    final storage = StorageService();
-    final enabled = await storage.isAppLockEnabled();
-    if (!enabled) return false;
-
-    final timeout = await storage.getAppLockTimeoutSeconds();
-    // -1 means "on close only", no time-based expiry
-    if (timeout == -1) return false;
-    // 0 means "immediately" — always expired when paused
-    if (timeout == 0) {
-      // Check if there was a pause event at all
-      final savedEpoch = await storage.getPausedAtTimestamp();
-      if (savedEpoch != null) {
-        await storage.clearPausedAtTimestamp();
-        return true;
-      }
-      return false;
-    }
-
-    // Read from memory first, then fall back to persisted value
-    DateTime? pauseTime = _pausedAt;
-    if (pauseTime == null) {
-      final savedEpoch = await storage.getPausedAtTimestamp();
-      if (savedEpoch != null) {
-        pauseTime = DateTime.fromMillisecondsSinceEpoch(savedEpoch);
-      }
-    }
-
-    if (pauseTime != null) {
-      final elapsed = DateTime.now().difference(pauseTime).inSeconds;
-      await storage.clearPausedAtTimestamp();
-      _pausedAt = null;
-      if (elapsed >= timeout) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   Future<bool> authenticate({
     String reason = 'Please authenticate to access SSH Dashboard',
     bool force = false,
   }) async {
     if (!force) {
-      final enabled = await StorageService().isAppLockEnabled();
+      final storage = StorageService();
+      final enabled = await storage.isAppLockEnabled();
       if (!enabled) {
         _isUnlocked = true;
+        _pausedAt = null;
+        await storage.clearPausedAtTimestamp();
         return true;
       }
       if (_isAuthenticating) return _isUnlocked;
 
-      // Even if _isUnlocked is true, check if timeout has expired
-      if (_isUnlocked) {
-        final expired = await _hasTimeoutExpired();
-        if (expired) {
-          _isUnlocked = false;
-        } else {
+      final timeout = await storage.getAppLockTimeoutSeconds();
+      if (timeout > 0) {
+        DateTime? pauseTime = _pausedAt;
+        if (pauseTime == null) {
+          final savedEpoch = await storage.getPausedAtTimestamp();
+          if (savedEpoch != null) {
+            pauseTime = DateTime.fromMillisecondsSinceEpoch(savedEpoch);
+          }
+        }
+
+        if (pauseTime != null) {
+          final elapsed = DateTime.now().difference(pauseTime).inSeconds;
+          _pausedAt = null;
+          await storage.clearPausedAtTimestamp();
+          if (elapsed < timeout) {
+            _isUnlocked = true;
+            return true;
+          } else {
+            _isUnlocked = false;
+          }
+        } else if (_isUnlocked) {
           return true;
+        }
+      } else if (timeout == -1) {
+        if (_isUnlocked) {
+          return true;
+        }
+      } else if (timeout == 0) {
+        if (_isUnlocked) {
+          final savedEpoch = await storage.getPausedAtTimestamp();
+          if (savedEpoch != null) {
+            _isUnlocked = false;
+            _pausedAt = null;
+            await storage.clearPausedAtTimestamp();
+          } else {
+            return true;
+          }
         }
       }
     } else {
@@ -90,6 +81,8 @@ class AppLockService {
       if (!canAuthenticate) {
         _isUnlocked = true;
         _isAuthenticating = false;
+        _pausedAt = null;
+        await StorageService().clearPausedAtTimestamp();
         return true;
       }
 
@@ -103,6 +96,10 @@ class AppLockService {
 
       _isUnlocked = didAuthenticate;
       _isAuthenticating = false;
+      if (didAuthenticate) {
+        _pausedAt = null;
+        await StorageService().clearPausedAtTimestamp();
+      }
       return didAuthenticate;
     } on PlatformException catch (_) {
       _isAuthenticating = false;
@@ -127,9 +124,15 @@ class AppLockService {
       _pausedAt = null;
       await storage.clearPausedAtTimestamp();
     } else {
-      _pausedAt = DateTime.now();
-      // Persist to disk so the timestamp survives process kills
-      await storage.savePausedAtTimestamp(_pausedAt!.millisecondsSinceEpoch);
+      if (_pausedAt == null) {
+        final savedEpoch = await storage.getPausedAtTimestamp();
+        if (savedEpoch == null) {
+          _pausedAt = DateTime.now();
+          await storage.savePausedAtTimestamp(_pausedAt!.millisecondsSinceEpoch);
+        } else {
+          _pausedAt = DateTime.fromMillisecondsSinceEpoch(savedEpoch);
+        }
+      }
     }
   }
 
@@ -139,13 +142,11 @@ class AppLockService {
     final storage = StorageService();
     final enabled = await storage.isAppLockEnabled();
     if (!enabled) {
+      _isUnlocked = true;
       _pausedAt = null;
       await storage.clearPausedAtTimestamp();
       return;
     }
-
-    // If not unlocked, nothing to check — authenticate() will be called separately
-    if (!_isUnlocked) return;
 
     final timeout = await storage.getAppLockTimeoutSeconds();
     if (timeout == -1) {
@@ -154,7 +155,6 @@ class AppLockService {
       return;
     }
     if (timeout == 0) {
-      // "Immediately" mode — check if there was a paused event
       final savedEpoch = await storage.getPausedAtTimestamp();
       if (savedEpoch != null) {
         _isUnlocked = false;
@@ -164,7 +164,6 @@ class AppLockService {
       return;
     }
 
-    // Read from memory first, then fall back to persisted value
     DateTime? pauseTime = _pausedAt;
     if (pauseTime == null) {
       final savedEpoch = await storage.getPausedAtTimestamp();
@@ -179,6 +178,8 @@ class AppLockService {
       await storage.clearPausedAtTimestamp();
       if (elapsed >= timeout) {
         _isUnlocked = false;
+      } else {
+        _isUnlocked = true;
       }
     }
   }
@@ -186,10 +187,23 @@ class AppLockService {
   Future<void> lock() async {
     final storage = StorageService();
     final enabled = await storage.isAppLockEnabled();
-    if (enabled) {
+    if (!enabled) return;
+
+    final timeout = await storage.getAppLockTimeoutSeconds();
+    if (timeout == -1 || timeout == 0) {
       _isUnlocked = false;
       _pausedAt = null;
       await storage.clearPausedAtTimestamp();
+    } else {
+      if (_pausedAt == null) {
+        final savedEpoch = await storage.getPausedAtTimestamp();
+        if (savedEpoch == null) {
+          _pausedAt = DateTime.now();
+          await storage.savePausedAtTimestamp(_pausedAt!.millisecondsSinceEpoch);
+        } else {
+          _pausedAt = DateTime.fromMillisecondsSinceEpoch(savedEpoch);
+        }
+      }
     }
   }
 }
