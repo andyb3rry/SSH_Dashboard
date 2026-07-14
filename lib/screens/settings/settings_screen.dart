@@ -249,12 +249,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: AppTheme.obsidian,
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(14),
                                       border: Border.all(color: AppTheme.cardBorder),
                                     ),
                                     child: DropdownButton<int>(
                                       value: _appLockTimeoutSeconds,
                                       dropdownColor: AppTheme.obsidian,
+                                      borderRadius: BorderRadius.circular(16),
                                       style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontSize: 14),
                                       underline: const SizedBox(),
                                       items: const [
@@ -356,12 +357,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                             decoration: BoxDecoration(
                               color: AppTheme.obsidian,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: AppTheme.cardBorder),
                             ),
                             child: DropdownButton<int>(
                               value: _sshTimeoutSeconds,
                               dropdownColor: AppTheme.obsidian,
+                              borderRadius: BorderRadius.circular(16),
                               style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontSize: 15),
                               underline: const SizedBox(),
                               items: const [

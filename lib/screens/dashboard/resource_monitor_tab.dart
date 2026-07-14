@@ -220,9 +220,9 @@ class ResourceMonitorTab extends StatelessWidget {
                 Expanded(
                   child: GlassCard(
                     child: StatGauge(
-                      title: 'Processor',
+                      title: 'CPU',
                       percentage: metrics.cpuUsagePercentage,
-                      subtitle: 'CPU',
+                      subtitle: metrics.cpuModel,
                       icon: Icons.developer_board,
                     ),
                   ),

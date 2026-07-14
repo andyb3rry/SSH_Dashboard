@@ -208,6 +208,8 @@ class SshService {
   double _lastRxBytes = 0.0;
   double _lastTxBytes = 0.0;
   DateTime? _lastNetTimestamp;
+  double? _lastCpuUsed;
+  double? _lastCpuTotal;
 
   /// Callback per intercettare sfide interattive, OTP o link browser 2FA del server
   Future<List<String>?> Function(SSHUserInfoRequest request)? onUserInfoRequestCallback;
@@ -337,6 +339,11 @@ class SshService {
       _client = null;
     }
     _currentProfile = null;
+    _lastRxBytes = 0.0;
+    _lastTxBytes = 0.0;
+    _lastNetTimestamp = null;
+    _lastCpuUsed = null;
+    _lastCpuTotal = null;
   }
 
   Future<String> executeCommand(String command, {Duration timeout = const Duration(seconds: 25)}) async {
@@ -377,7 +384,9 @@ uptime -p 2>/dev/null | sed 's/^/UPTIME: /' || uptime | sed 's/^/UPTIME: /'
 cat /proc/loadavg | awk '{print "LOAD:", \$1, \$2, \$3}'
 echo "KERNEL: \$(uname -r)"
 grep "^PRETTY_NAME=" /etc/os-release 2>/dev/null | cut -d'"' -f2 | sed 's/^/OS: /' || echo "OS: Linux"
-cpu_val=\$( (awk '/^cpu / {print \$2+\$4, \$2+\$4+\$5}' /proc/stat; sleep 0.35; awk '/^cpu / {print \$2+\$4, \$2+\$4+\$5}' /proc/stat) 2>/dev/null | awk 'NR==1 {u1=\$1; t1=\$2} NR==2 {u2=\$1; t2=\$2; if(t2-t1>0) printf "%.1f", (u2-u1)*100/(t2-t1); else print "0.0"}' )
+awk -F':' '/^model name|^Processor|^Hardware/ {sub(/^[ \\t]+/, "", \$2); print "CPUMODEL: " \$2; exit}' /proc/cpuinfo 2>/dev/null || echo "CPUMODEL: Unknown Processor"
+awk '/^cpu / {u=\$2+\$3+\$4+\$7+\$8+\$9; t=u+\$5+\$6; print "CPURAW:", u, t}' /proc/stat 2>/dev/null
+cpu_val=\$( (awk '/^cpu / {u=\$2+\$3+\$4+\$7+\$8+\$9; t=u+\$5+\$6; print u, t}' /proc/stat; sleep 0.4; awk '/^cpu / {u=\$2+\$3+\$4+\$7+\$8+\$9; t=u+\$5+\$6; print u, t}' /proc/stat) 2>/dev/null | awk 'NR==1 {u1=\$1; t1=\$2} NR==2 {u2=\$1; t2=\$2; if(t2-t1>0) printf "%.1f", (u2-u1)*100/(t2-t1); else print "0.0"}' )
 if [ -z "\$cpu_val" ]; then cpu_val="0.0"; fi
 echo "CPU: \$cpu_val"
 cpu_temp=""
@@ -432,6 +441,7 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
       String loadAvg = '0.0, 0.0, 0.0';
       String kernel = 'Unknown';
       String osRelease = 'Linux OS';
+      String cpuModel = 'Unknown Processor';
       double cpuPercentage = 0.0;
       double cpuTemp = -1.0;
       double rxKbps = 0.0;
@@ -458,8 +468,27 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
           kernel = line.substring(7).trim();
         } else if (line.startsWith('OS:')) {
           osRelease = line.substring(3).trim();
+        } else if (line.startsWith('CPUMODEL:')) {
+          cpuModel = line.substring(9).trim();
         } else if (line.startsWith('CPU:')) {
-          cpuPercentage = double.tryParse(line.substring(4).trim()) ?? 0.0;
+          if (_lastCpuTotal == null || _lastCpuUsed == null) {
+            cpuPercentage = double.tryParse(line.substring(4).trim()) ?? 0.0;
+          }
+        } else if (line.startsWith('CPURAW:')) {
+          final parts = line.substring(7).trim().split(RegExp(r'\s+'));
+          if (parts.length >= 2) {
+            final currentUsed = double.tryParse(parts[0]) ?? 0.0;
+            final currentTotal = double.tryParse(parts[1]) ?? 0.0;
+            if (_lastCpuTotal != null && _lastCpuUsed != null && currentTotal > _lastCpuTotal!) {
+              final totalDiff = currentTotal - _lastCpuTotal!;
+              final usedDiff = currentUsed - _lastCpuUsed!;
+              if (totalDiff > 0) {
+                cpuPercentage = (usedDiff * 100.0 / totalDiff).clamp(0.0, 100.0);
+              }
+            }
+            _lastCpuUsed = currentUsed;
+            _lastCpuTotal = currentTotal;
+          }
         } else if (line.startsWith('TEMP:')) {
           cpuTemp = double.tryParse(line.substring(5).trim()) ?? -1.0;
         } else if (line.startsWith('NET:')) {
@@ -539,6 +568,7 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
         networkUploadSpeedKbps: txKbps,
         cpuTemperatureCelsius: cpuTemp,
         disks: disksList,
+        cpuModel: cpuModel,
       );
     } catch (e) {
       await disconnect();

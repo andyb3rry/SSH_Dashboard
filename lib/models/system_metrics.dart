@@ -15,6 +15,7 @@ class SystemMetrics {
   final double networkUploadSpeedKbps;
   final double cpuTemperatureCelsius;
   final List<DiskInfo> disks;
+  final String cpuModel;
 
   SystemMetrics({
     required this.cpuUsagePercentage,
@@ -31,6 +32,7 @@ class SystemMetrics {
     this.networkUploadSpeedKbps = 0.0,
     this.cpuTemperatureCelsius = -1.0,
     this.disks = const [],
+    this.cpuModel = 'Unknown Processor',
   });
 
   factory SystemMetrics.empty() {
@@ -49,6 +51,7 @@ class SystemMetrics {
       networkUploadSpeedKbps: 0.0,
       cpuTemperatureCelsius: -1.0,
       disks: const [],
+      cpuModel: 'Unknown Processor',
     );
   }
 
@@ -77,6 +80,7 @@ class SystemMetrics {
     double? networkUploadSpeedKbps,
     double? cpuTemperatureCelsius,
     List<DiskInfo>? disks,
+    String? cpuModel,
   }) {
     return SystemMetrics(
       cpuUsagePercentage: cpuUsagePercentage ?? this.cpuUsagePercentage,
@@ -93,6 +97,7 @@ class SystemMetrics {
       networkUploadSpeedKbps: networkUploadSpeedKbps ?? this.networkUploadSpeedKbps,
       cpuTemperatureCelsius: cpuTemperatureCelsius ?? this.cpuTemperatureCelsius,
       disks: disks ?? this.disks,
+      cpuModel: cpuModel ?? this.cpuModel,
     );
   }
 }

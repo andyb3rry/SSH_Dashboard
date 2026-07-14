@@ -322,13 +322,14 @@ class _ProcessManagerSheetState extends State<ProcessManagerSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: AppTheme.obsidian,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppTheme.cardBorder),
                 ),
                 child: DropdownButton<String>(
                   value: _sortBy,
                   underline: const SizedBox(),
                   dropdownColor: AppTheme.obsidian,
+                  borderRadius: BorderRadius.circular(16),
                   icon: const Icon(Icons.sort, color: AppTheme.neonCyan, size: 20),
                   items: [
                     DropdownMenuItem(value: 'cpu', child: Text('Sort: % CPU', style: GoogleFonts.outfit(color: Colors.white, fontSize: 13))),
