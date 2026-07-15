@@ -1190,10 +1190,8 @@ class _CronManagerSectionState extends State<CronManagerSection> {
               );
             },
           ),
-        const SizedBox(height: 16),
-
-        // Add Job Button (only for User crontab — root editing disabled for security)
-        if (!_isRootTab)
+        if (!_isRootTab) ...[
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1208,7 +1206,8 @@ class _CronManagerSectionState extends State<CronManagerSection> {
               label: Text('Add Job to Crontab (User)', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
             ),
           ),
-        const SizedBox(height: 24),
+        ],
+        const SizedBox(height: 14),
       ],
     );
   }

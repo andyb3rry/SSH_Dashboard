@@ -122,7 +122,7 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 120),
+                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 144),
                     itemCount: filteredContainers.length,
                     itemBuilder: (ctx, idx) {
                       final container = filteredContainers[idx];

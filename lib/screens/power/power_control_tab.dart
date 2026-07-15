@@ -336,7 +336,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 144),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -496,7 +496,6 @@ class _PowerControlTabState extends State<PowerControlTab> {
             const SizedBox(height: 24),
           ],
           const CronManagerSection(),
-          const SizedBox(height: 32),
         ],
       ),
     );

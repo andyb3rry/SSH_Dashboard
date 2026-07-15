@@ -239,7 +239,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
               ),
             )
           : ListView.builder(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: widget.isModalSelection ? 16 : 180),
+              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: widget.isModalSelection ? 16 : 144),
               itemCount: provider.profiles.length,
               itemBuilder: (ctx, idx) {
                 final profile = provider.profiles[idx];
@@ -248,7 +248,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
                 final isConnecting = isActive && provider.status == ConnectionStatus.connecting;
 
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 14),
                   child: GlassCard(
                     isGlow: isConnected || isConnecting,
                     borderColor: isConnected ? AppTheme.emerald : (isConnecting ? AppTheme.amber : null),

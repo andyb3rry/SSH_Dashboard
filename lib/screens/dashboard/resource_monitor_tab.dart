@@ -32,7 +32,7 @@ class ResourceMonitorTab extends StatelessWidget {
       onRefresh: () async => await provider.refreshData(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 144),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -322,13 +322,15 @@ class ResourceMonitorTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             if (metrics.disks.isEmpty)
-              _buildSingleDiskCard(metrics.diskUsagePercentage, metrics.diskUsedGb, metrics.diskTotalGb, '/', 'Root Filesystem')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _buildSingleDiskCard(metrics.diskUsagePercentage, metrics.diskUsedGb, metrics.diskTotalGb, '/', 'Root Filesystem'),
+              )
             else
               ...metrics.disks.map((disk) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.only(bottom: 14),
                     child: _buildSingleDiskCard(disk.usagePercentage, disk.usedGb, disk.totalGb, disk.mountPoint, disk.filesystem),
                   )),
-            const SizedBox(height: 24),
           ],
         ),
       ),
