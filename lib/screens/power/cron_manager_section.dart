@@ -312,6 +312,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
   static const Set<String> _genericTokens = {
     'mountpoint', 'rsync', 'docker', 'exec', 'sh', 'bash', 'python', 'python3', 'php', 'node',
+    'npm', 'pm2', 'java', 'ruby', 'git', 'mysql', 'psql', 'mongodump', 'redis-cli',
     'curl', 'wget', 'tar', 'gzip', 'zip', 'unzip', 'chown', 'chmod', 'cp', 'mv', 'rm', 'cat',
     'echo', 'grep', 'find', 'sed', 'awk', 'xargs', 'tee', 'nice', 'ionice', 'sudo', 'su', 'cd',
     'test', 'sleep', 'date', 'time', 'bin', 'usr', 'local', 'opt', 'var', 'tmp', 'etc', 'mnt',

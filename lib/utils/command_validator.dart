@@ -118,9 +118,12 @@ class CommandValidator {
   static const List<String> _whitelistedCronBinaries = [
     'rsync', 'tar', 'gzip', 'gunzip', 'bzip2', 'xz', 'zip', 'unzip',
     'borg', 'restic', 'rclone', 'pg_dump', 'pg_dumpall', 'mysqldump', 'sqlite3',
+    'mysql', 'psql', 'mongodump', 'redis-cli',
     'apt', 'apt-get', 'dpkg', 'dnf', 'yum', 'pacman', 'zypper', 'apk', 'snap', 'flatpak',
     'systemctl', 'service', 'journalctl', 'logrotate', 'find', 'fstrim', 'updatedb', 'ldconfig',
     'certbot', 'docker', 'podman', 'zpool', 'zfs', 'btrfs', 'mdadm', 'smartctl',
+    'php', 'python', 'python3', 'node', 'npm', 'pm2', 'java', 'ruby',
+    'curl', 'wget', 'git',
     'echo', 'true', 'date',
   ];
 
@@ -154,9 +157,17 @@ class CommandValidator {
     'netcat -e',
     'python -c',
     'python3 -c',
+    'python -i',
+    'python3 -i',
     'perl -e',
     'ruby -e',
+    'ruby -i',
     'php -r',
+    'php -a',
+    'node -e',
+    'node --eval',
+    'node -i',
+    'node --interactive',
     'bash -i',
     'sh -i',
     'eval ',
@@ -248,18 +259,18 @@ class CommandValidator {
       }
     }
 
-    // Check for pipe from curl/wget to shell
-    if (RegExp(r'(curl|wget)\s+[^|]+\|\s*(sudo\s+)?(bash|sh|zsh)').hasMatch(cleanCmd)) {
+    // Check for pipe from curl/wget to shell or interpreters
+    if (RegExp(r'(curl|wget)\s+[^|]+\|\s*(sudo\s+|env\s+)?(bash|sh|zsh|python|python3|node|perl|ruby|php)').hasMatch(cleanCmd)) {
       return const ValidationResult(
         isSafe: false,
         severity: ValidationSeverity.blocked,
-        message: 'Blocked: downloading and piping directly to shell is forbidden in crontab.',
+        message: 'Blocked: downloading and piping directly to shell or interpreters is forbidden in crontab.',
       );
     }
 
     // Check for world-writable execution paths (/tmp, /var/tmp, /dev/shm) or non-whitelisted paths
-    if (RegExp(r'(^|\s|\||&&|;)(sudo\s+)?(bash|sh|python|perl|/bin/sh|/bin/bash)?\s*[\042\047]?/(var/)?tmp/').hasMatch(cleanCmd) ||
-        RegExp(r'(^|\s|\||&&|;)(sudo\s+)?(bash|sh|python|perl|/bin/sh|/bin/bash)?\s*[\042\047]?/dev/shm/').hasMatch(cleanCmd)) {
+    if (RegExp(r'(^|\s|\||&&|;)(sudo\s+)?(bash|sh|python|python3|perl|ruby|php|node|/bin/sh|/bin/bash)?\s*[\042\047]?/(var/)?tmp/').hasMatch(cleanCmd) ||
+        RegExp(r'(^|\s|\||&&|;)(sudo\s+)?(bash|sh|python|python3|perl|ruby|php|node|/bin/sh|/bin/bash)?\s*[\042\047]?/dev/shm/').hasMatch(cleanCmd)) {
       return const ValidationResult(
         isSafe: false,
         severity: ValidationSeverity.blocked,
