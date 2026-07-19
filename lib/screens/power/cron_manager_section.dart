@@ -1207,8 +1207,8 @@ class _CronManagerSectionState extends State<CronManagerSection> {
               label: Text('Add Job to Crontab (User)', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
             ),
           ),
+          const SizedBox(height: 14),
         ],
-        const SizedBox(height: 14),
       ],
     );
   }

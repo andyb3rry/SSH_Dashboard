@@ -215,30 +215,33 @@ class ResourceMonitorTab extends StatelessWidget {
               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: GlassCard(
-                    child: StatGauge(
-                      title: 'CPU',
-                      percentage: metrics.cpuUsagePercentage,
-                      subtitle: metrics.cpuModel,
-                      icon: Icons.developer_board,
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: GlassCard(
+                      child: StatGauge(
+                        title: 'CPU',
+                        percentage: metrics.cpuUsagePercentage,
+                        subtitle: metrics.cpuModel,
+                        icon: Icons.developer_board,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: GlassCard(
-                    child: StatGauge(
-                      title: 'Memory (RAM)',
-                      percentage: metrics.memoryUsagePercentage,
-                      subtitle: '${metrics.memoryUsedMb.toStringAsFixed(0)} / ${metrics.memoryTotalMb.toStringAsFixed(0)} MB',
-                      icon: Icons.memory,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: GlassCard(
+                      child: StatGauge(
+                        title: 'Memory (RAM)',
+                        percentage: metrics.memoryUsagePercentage,
+                        subtitle: '${metrics.memoryUsedMb.toStringAsFixed(0)} / ${metrics.memoryTotalMb.toStringAsFixed(0)} MB',
+                        icon: Icons.memory,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 16),
 
