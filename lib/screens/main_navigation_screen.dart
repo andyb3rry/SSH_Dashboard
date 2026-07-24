@@ -15,6 +15,7 @@ import 'package:dartssh2/src/ssh_userauth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'terminal/interactive_shell_sheet.dart';
 import '../services/app_lock_service.dart';
+import '../services/storage_service.dart';
 import 'settings/settings_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -57,6 +58,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       });
       provider.onCloudflareAuthCallback = (profile) async {
         return await _showCloudflareAuthDialog(profile);
+      };
+      // [C1] Wire up TOFU host key verification callback
+      provider.sshService.onHostKeyVerifyCallback = (host, keyType, fingerprintHex) async {
+        return await _showHostKeyVerifyDialog(host, keyType, fingerprintHex);
       };
     });
   }
@@ -124,6 +129,88 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to open $url')));
       }
     }
+  }
+
+  /// [C1] Show a dialog asking the user to verify the SSH host key fingerprint on first connection (TOFU).
+  Future<bool> _showHostKeyVerifyDialog(String host, String keyType, String fingerprintBase64) async {
+    // Display in standard SSH format matching `ssh-keygen -l` output
+    final displayFp = 'SHA256:$fingerprintBase64';
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.obsidian,
+        title: Row(
+          children: [
+            const Icon(Icons.verified_user, color: AppTheme.amber),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Verify SSH Host Key',
+                style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You are connecting to this server for the first time. '
+                'Please verify the SSH host key fingerprint matches your server\'s key:',
+                style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceDark,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.amber),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Host: $host', style: GoogleFonts.firaCode(color: AppTheme.neonCyan, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text('Key type: $keyType', style: GoogleFonts.firaCode(color: Colors.white60, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Text('Fingerprint (verify with ssh-keygen -l):', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      displayFp,
+                      style: GoogleFonts.firaCode(color: AppTheme.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'If you trust this server, tap "Trust & Connect". '
+                'The fingerprint will be saved for future connections.',
+                style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Reject', style: GoogleFonts.outfit(color: AppTheme.crimson, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emerald, foregroundColor: Colors.black),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Trust & Connect', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Future<String?> _showCloudflareAuthDialog(ServerProfile profile) async {
@@ -331,7 +418,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     return result;
   }
 
-  void _openTerminal() {
+  void _openTerminal() async {
     final provider = Provider.of<ServerProvider>(context, listen: false);
     if (provider.status != ConnectionStatus.connected) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -351,13 +438,37 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       return;
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const InteractiveShellSheet(),
-        fullscreenDialog: true,
-      ),
-    );
+    // [M5] Require biometric re-authentication before opening unrestricted terminal
+    final storage = StorageService();
+    final isTerminalAuthEnabled = await storage.isTerminalBiometricAuthEnabled();
+
+    if (isTerminalAuthEnabled) {
+      final authenticated = await AppLockService().authenticate(
+        reason: 'Authenticate to open the interactive SSH terminal',
+        force: true,
+      );
+      if (!authenticated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication required to open the terminal.'),
+              backgroundColor: AppTheme.crimson,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const InteractiveShellSheet(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
   }
 
   @override

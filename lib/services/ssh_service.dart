@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'storage_service.dart';
 // ignore: implementation_imports
@@ -95,7 +96,10 @@ class CloudflareWebSocketSocket implements SSHSocket {
     }
         
     final httpUri = Uri.parse(uriStr.replaceAll(RegExp(r'^wss?:'), 'https:'));
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    // [C2] Explicit TLS certificate validation — reject all bad certificates
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => false;
     try {
       final req = await client.getUrl(httpUri);
       req.headers.set('User-Agent', 'cloudflared/2025.1.0 (dartssh2)');
@@ -129,23 +133,19 @@ class CloudflareWebSocketSocket implements SSHSocket {
         );
         return CloudflareWebSocketSocket(ws);
       } else {
-        final headersList = <String>[];
-        resp.headers.forEach((name, values) => headersList.add('$name: ${values.join(", ")}'));
-        final respHeadersInfo = headersList.join('\n');
-        
+        // [M6] Read body for detection but don't leak full headers/body in exceptions
         final bodyBytes = await resp.cast<List<int>>().expand((x) => x).take(350).toList();
         final bodyText = utf8.decode(bodyBytes, allowMalformed: true).trim();
         client.close();
 
         if (bodyText.contains('Sign in') && bodyText.contains('Cloudflare Access') || bodyText.contains('<title>Sign in')) {
           throw Exception(
-            'Cloudflare Zero Trust intercepted the connection and returned a Web Login HTML page ("Sign in • Cloudflare Access").\n\n'
-            'POSSIBLE CAUSE:\n'
-            'The provided Service Token failed validation or does not have an active Policy on the Access application linked to "$hostPart".\n\n'
-            'HOW TO RESOLVE IN CLOUDFLARE ZERO TRUST:\n'
-            '1. Log into the Cloudflare Zero Trust dashboard -> Access -> Applications.\n'
-            '2. Select the application "$hostPart" -> "Policies" tab.\n'
-            '3. Ensure there is a "Service Auth" (or "Allow") policy that includes the "Service Token" rule associated with your token.\n'
+            'Cloudflare Zero Trust intercepted the connection and returned a Web Login page.\n\n'
+            'The provided Service Token may have failed validation or may not have an active Policy on the Access application.\n\n'
+            'HOW TO RESOLVE:\n'
+            '1. Log into Cloudflare Zero Trust dashboard -> Access -> Applications.\n'
+            '2. Check the Policies tab for your SSH application.\n'
+            '3. Ensure there is a "Service Auth" policy that includes your Service Token.\n'
             '4. Verify that Client ID and Client Secret are typed accurately.'
           );
         }
@@ -153,19 +153,19 @@ class CloudflareWebSocketSocket implements SSHSocket {
         if (resp.statusCode == 403) {
           throw Exception(
             'Cloudflare Zero Trust denied access (HTTP 403 Forbidden).\n\n'
-            'Ensure the Client ID and Client Secret are correct and authorized by the policy on host "$hostPart".'
+            'Ensure the Client ID and Client Secret are correct and authorized.'
           );
         } else if (resp.statusCode == 302 || resp.statusCode == 301) {
           throw Exception(
             'Cloudflare Zero Trust requested a redirect (HTTP ${resp.statusCode}).\n\n'
-            'Service Token authentication failed and the server is attempting to redirect to web login.'
+            'Service Token authentication failed — the server is redirecting to web login.'
           );
         }
 
+        // [M6] Sanitized error — do NOT leak raw response headers or body content
         throw Exception(
           'WebSocket connection to Cloudflare Tunnel failed (HTTP ${resp.statusCode} instead of 101 Switching Protocols).\n\n'
-          'Proxy response headers:\n$respHeadersInfo\n\n'
-          'Response content (first 350 chars):\n"$bodyText"'
+          'Check your Cloudflare Tunnel configuration, hostname, and Service Token credentials.'
         );
       }
     } catch (e) {
@@ -213,6 +213,10 @@ class SshService {
 
   /// Callback per intercettare sfide interattive, OTP o link browser 2FA del server
   Future<List<String>?> Function(SSHUserInfoRequest request)? onUserInfoRequestCallback;
+
+  /// [C1] Callback per verificare il fingerprint SSH del server alla prima connessione (TOFU)
+  /// Riceve: host, tipo di chiave, fingerprint SHA-256 hex. Ritorna true per accettare.
+  Future<bool> Function(String host, String keyType, String fingerprintHex)? onHostKeyVerifyCallback;
 
   /// Callback per richiedere inserimento Service Token Cloudflare Access se mancano i segreti
   Future<String?> Function(ServerProfile profile)? onCloudflareAuthCallback;
@@ -292,19 +296,29 @@ class SshService {
     }
 
     FutureOr<bool> hostKeyVerifier(String type, Uint8List fingerprint) async {
-      final fpStr = utf8.decode(fingerprint, allowMalformed: true);
+      // [C3] Compute SHA-256 fingerprint — hex for storage, base64 for display (matches ssh-keygen -l)
+      final fpDigest = sha256.convert(fingerprint);
+      final fpHash = fpDigest.toString();
+      final fpBase64 = base64Encode(fpDigest.bytes).replaceAll(RegExp(r'=+$'), '');
       final storage = StorageService();
       final hostKeyId = '${profile.id}_${profile.host}_${profile.port}';
       final storedFp = await storage.getHostFingerprint(hostKeyId);
       if (storedFp == null) {
-        await storage.saveHostFingerprint(hostKeyId, fpStr);
+        // [C1] First connection — ask user for TOFU confirmation via callback
+        if (onHostKeyVerifyCallback != null) {
+          final accepted = await onHostKeyVerifyCallback!(profile.host, type, fpBase64);
+          if (!accepted) {
+            throw Exception('SSH host key rejected by user for ${profile.host}.');
+          }
+        }
+        await storage.saveHostFingerprint(hostKeyId, fpHash);
         return true;
       }
-      if (storedFp != fpStr) {
+      if (storedFp != fpHash) {
         throw Exception(
           '⚠️ SECURITY ALERT: SSH Host Key Mismatch (MITM Protection)!\n'
-          'The host fingerprint for ${profile.host} has changed from $storedFp to $fpStr.\n'
-          'If the server was reinstalled, please delete and re-add the server profile.'
+          'The host key fingerprint for ${profile.host} has changed.\n'
+          'If the server was reinstalled, delete and re-add the server profile or clear host fingerprints in Settings.'
         );
       }
       return true;
@@ -631,40 +645,58 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
     }
   }
 
+  // [H3] Container ID validation with length limit
   void _validateContainerId(String id) {
-    if (id.isEmpty || !RegExp(r'^[a-zA-Z0-9_.-]+$').hasMatch(id)) {
-      throw ArgumentError('Security check: invalid container ID format ($id)');
+    if (id.isEmpty || id.length > 128 || !RegExp(r'^[a-zA-Z0-9_.-]+$').hasMatch(id)) {
+      throw ArgumentError('Security check: invalid container ID format.');
     }
   }
 
+  // [H3] All Docker commands use shell-quoted container IDs
   Future<bool> startContainer(String id) async {
     _validateContainerId(id);
-    await executeCommand('docker start $id');
+    await executeCommand('docker start "$id"');
     return true;
   }
 
   Future<bool> stopContainer(String id) async {
     _validateContainerId(id);
-    await executeCommand('docker stop $id');
+    await executeCommand('docker stop "$id"');
     return true;
   }
 
   Future<bool> restartContainer(String id) async {
     _validateContainerId(id);
-    await executeCommand('docker restart $id');
+    await executeCommand('docker restart "$id"');
     return true;
   }
 
   Future<String> fetchContainerLogs(String id, {int tail = 150}) async {
     _validateContainerId(id);
     if (tail <= 0 || tail > 10000) tail = 150;
-    return await executeCommand('docker logs --tail $tail $id 2>&1');
+    return await executeCommand('docker logs --tail $tail "$id" 2>&1');
+  }
+
+  // [C4] Validate command input at the sudo API boundary
+  static void _validateCommandInput(String command) {
+    if (command.length > 4096) {
+      throw ArgumentError('Security check: command exceeds maximum allowed length (4096 chars).');
+    }
+    if (command.contains('\x00')) {
+      throw ArgumentError('Security check: null bytes are forbidden in commands.');
+    }
+    // Newlines in the command itself are dangerous — the base64 encoding handles transport,
+    // but the decoded command should not contain control characters that could escape the shell.
+    if (command.contains('\r')) {
+      throw ArgumentError('Security check: carriage returns are forbidden in commands.');
+    }
   }
 
   Future<String> executeSudoCommand(String command, String sudoPassword, {Duration timeout = const Duration(seconds: 25)}) async {
     if (!isConnected) {
       throw Exception('SSH client not connected.');
     }
+    _validateCommandInput(command);
     _isBusyWithCommand = true;
     try {
       final base64Cmd = base64Encode(utf8.encode(command));
@@ -708,6 +740,7 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
     if (!isConnected) {
       throw Exception('SSH client not connected.');
     }
+    _validateCommandInput(command);
     _isBusyWithCommand = true;
     try {
       final base64Cmd = base64Encode(utf8.encode(command));

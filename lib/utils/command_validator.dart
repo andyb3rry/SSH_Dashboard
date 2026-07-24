@@ -239,8 +239,26 @@ class CommandValidator {
       );
     }
 
-    // Check for subshells `...` or $(...)
-    if (cleanCmd.contains('`') || RegExp(r'\$\([^)]+\)').hasMatch(cleanCmd)) {
+    // [H5] Block newlines, carriage returns, and null bytes — prevents multi-line injection
+    if (cleanCmd.contains('\n') || cleanCmd.contains('\r') || cleanCmd.contains('\x00')) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: newlines, carriage returns, and null bytes are forbidden in crontab commands.',
+      );
+    }
+
+    // [H5] Block heredocs and process substitution operators
+    if (cleanCmd.contains('<<') || cleanCmd.contains('<(') || cleanCmd.contains('>(')) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: heredoc (<<) and process substitution (<( / >() operators are forbidden in crontab.',
+      );
+    }
+
+    // Check for subshells `...` or $(...) including nested
+    if (cleanCmd.contains('`') || RegExp(r'\$\(').hasMatch(cleanCmd)) {
       return const ValidationResult(
         isSafe: false,
         severity: ValidationSeverity.blocked,
@@ -248,9 +266,10 @@ class CommandValidator {
       );
     }
 
-    // Check for dangerous or forbidden substrings
+    // [H4] Check for dangerous or forbidden substrings — CASE-INSENSITIVE
+    final cleanCmdLower = cleanCmd.toLowerCase();
     for (final pattern in _forbiddenPatterns) {
-      if (cleanCmd.contains(pattern)) {
+      if (cleanCmdLower.contains(pattern.toLowerCase())) {
         return ValidationResult(
           isSafe: false,
           severity: ValidationSeverity.blocked,
@@ -278,8 +297,8 @@ class CommandValidator {
       );
     }
 
-    // Strict Whitelist check on all command segments (split by &&, ||, ;)
-    final segments = cleanCmd.split(RegExp(r'(\s*&&\s*|\s*\|\|\s*|\s*;\s*)'));
+    // [H5] Strict Whitelist check on all command segments (split by &&, ||, ;, and | pipes)
+    final segments = cleanCmd.split(RegExp(r'(\s*&&\s*|\s*\|\|\s*|\s*;\s*|\s*\|\s*)'));
     for (var segment in segments) {
       final s = segment.trim();
       if (s.isEmpty) continue;

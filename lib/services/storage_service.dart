@@ -25,12 +25,15 @@ class StorageService {
         final securePwd = await _secureStorage.read(key: 'secret_pwd_${profile.id}');
         final secureKey = await _secureStorage.read(key: 'secret_key_${profile.id}');
         final secureCfSecret = await _secureStorage.read(key: 'cf_secret_${profile.id}');
+        // [M4] cloudflareClientId is now also stored in secure storage
+        final secureCfClientId = await _secureStorage.read(key: 'cf_client_id_${profile.id}');
         
         String finalPwd = securePwd ?? profile.password;
         String finalKey = secureKey ?? profile.privateKey;
         String finalCfSecret = secureCfSecret ?? profile.cloudflareClientSecret;
+        String finalCfClientId = secureCfClientId ?? profile.cloudflareClientId;
         
-        // Migrazione trasparente: se troviamo password, chiave privata o client secret nel vecchio JSON su SharedPreferences,
+        // Migrazione trasparente: se troviamo password, chiave privata, client ID o client secret nel vecchio JSON su SharedPreferences,
         // le salviamo subito in KeyStore/Keychain e segniamo che SharedPreferences va ripulito dai segreti.
         if (securePwd == null && profile.password.isNotEmpty) {
           await _secureStorage.write(key: 'secret_pwd_${profile.id}', value: profile.password);
@@ -44,11 +47,16 @@ class StorageService {
           await _secureStorage.write(key: 'cf_secret_${profile.id}', value: profile.cloudflareClientSecret);
           needsSanitizeMigration = true;
         }
-        if (profile.password.isNotEmpty || profile.privateKey.isNotEmpty || profile.cloudflareClientSecret.isNotEmpty) {
+        // [M4] Migrate cloudflareClientId to secure storage
+        if (secureCfClientId == null && profile.cloudflareClientId.isNotEmpty) {
+          await _secureStorage.write(key: 'cf_client_id_${profile.id}', value: profile.cloudflareClientId);
+          needsSanitizeMigration = true;
+        }
+        if (profile.password.isNotEmpty || profile.privateKey.isNotEmpty || profile.cloudflareClientSecret.isNotEmpty || profile.cloudflareClientId.isNotEmpty) {
           needsSanitizeMigration = true;
         }
 
-        profiles.add(profile.copyWith(password: finalPwd, privateKey: finalKey, cloudflareClientSecret: finalCfSecret));
+        profiles.add(profile.copyWith(password: finalPwd, privateKey: finalKey, cloudflareClientSecret: finalCfSecret, cloudflareClientId: finalCfClientId));
       } catch (e) {
         // Ignora eventuali profili corrotti
       }
@@ -62,7 +70,7 @@ class StorageService {
   }
 
   Future<void> saveProfile(ServerProfile profile) async {
-    // 1. Scriviamo immediatamente password, privateKey e cloudflareClientSecret in memoria sicura (KeyStore / Keychain)
+    // 1. Scriviamo immediatamente password, privateKey, cloudflareClientId e cloudflareClientSecret in memoria sicura (KeyStore / Keychain)
     if (profile.password.isNotEmpty) {
       await _secureStorage.write(key: 'secret_pwd_${profile.id}', value: profile.password);
     } else {
@@ -77,6 +85,12 @@ class StorageService {
       await _secureStorage.write(key: 'cf_secret_${profile.id}', value: profile.cloudflareClientSecret);
     } else {
       await _secureStorage.delete(key: 'cf_secret_${profile.id}');
+    }
+    // [M4] Store cloudflareClientId in secure storage
+    if (profile.cloudflareClientId.isNotEmpty) {
+      await _secureStorage.write(key: 'cf_client_id_${profile.id}', value: profile.cloudflareClientId);
+    } else {
+      await _secureStorage.delete(key: 'cf_client_id_${profile.id}');
     }
 
     // 2. Manteniamo la lista dei profili salvando su SharedPreferences SOLO i metadati non sensibili
@@ -99,6 +113,8 @@ class StorageService {
     await _secureStorage.delete(key: 'secret_pwd_$id');
     await _secureStorage.delete(key: 'secret_key_$id');
     await _secureStorage.delete(key: 'cf_secret_$id');
+    // [M4] Remove cloudflareClientId from secure storage
+    await _secureStorage.delete(key: 'cf_client_id_$id');
 
     final activeId = await getActiveServerId();
     if (activeId == id) {
@@ -109,8 +125,8 @@ class StorageService {
 
   Future<void> _saveAll(List<ServerProfile> profiles) async {
     final prefs = await SharedPreferences.getInstance();
-    // Prima di salvare in SharedPreferences svuotiamo SEMPRE password, privateKey e cloudflareClientSecret
-    final sanitizedList = profiles.map((p) => jsonEncode(p.copyWith(password: '', privateKey: '', cloudflareClientSecret: '').toJson())).toList();
+    // [M4] Prima di salvare in SharedPreferences svuotiamo SEMPRE password, privateKey, cloudflareClientId e cloudflareClientSecret
+    final sanitizedList = profiles.map((p) => jsonEncode(p.copyWith(password: '', privateKey: '', cloudflareClientId: '', cloudflareClientSecret: '').toJson())).toList();
     await prefs.setStringList(_profilesKey, sanitizedList);
   }
 
@@ -134,6 +150,7 @@ class StorageService {
 
   static const String _appLockEnabledKey = 'app_lock_biometric_enabled';
   static const String _appLockTimeoutKey = 'app_lock_timeout_seconds';
+  static const String _terminalBiometricAuthKey = 'terminal_biometric_auth_enabled';
   static const String _terminalFontSizeKey = 'terminal_font_size';
   static const String _sshTimeoutKey = 'ssh_command_timeout_seconds';
   static const String _autoRefreshIntervalKey = 'auto_refresh_interval_seconds';
@@ -156,6 +173,16 @@ class StorageService {
   Future<void> setAppLockTimeoutSeconds(int seconds) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_appLockTimeoutKey, seconds);
+  }
+
+  Future<bool> isTerminalBiometricAuthEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_terminalBiometricAuthKey) ?? true;
+  }
+
+  Future<void> setTerminalBiometricAuthEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_terminalBiometricAuthKey, enabled);
   }
 
   Future<double> getTerminalFontSize() async {

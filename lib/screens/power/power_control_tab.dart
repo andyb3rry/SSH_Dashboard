@@ -36,7 +36,8 @@ class _PowerControlTabState extends State<PowerControlTab> {
 
   void _confirmPowerAction(BuildContext context, {required bool isReboot}) {
     final provider = Provider.of<ServerProvider>(context, listen: false);
-    final passwordController = TextEditingController(text: provider.activeProfile?.password ?? '');
+    // [H1] Don't pre-populate sudo password — user must type it manually
+    final passwordController = TextEditingController();
     bool obscure = true;
 
     showDialog(
@@ -107,14 +108,19 @@ class _PowerControlTabState extends State<PowerControlTab> {
           ],
         ),
       ),
-    ).then((_) => passwordController.dispose());
+    ).then((_) {
+      Future.delayed(const Duration(milliseconds: 400), () {
+        passwordController.dispose();
+      });
+    });
   }
 
   void _runSystemUpdate(BuildContext context) {
     final provider = Provider.of<ServerProvider>(context, listen: false);
     final command = provider.activeProfile?.customUpdateCommand ?? 'sudo apt update && sudo apt upgrade -y';
     final validation = CommandValidator.validateUpdateCommand(command);
-    final passwordController = TextEditingController(text: provider.activeProfile?.password ?? '');
+    // [H1] Don't pre-populate sudo password — user must type it manually
+    final passwordController = TextEditingController();
     bool obscure = true;
 
     showDialog(
@@ -318,7 +324,11 @@ class _PowerControlTabState extends State<PowerControlTab> {
           ],
         ),
       ),
-    ).then((_) => passwordController.dispose());
+    ).then((_) {
+      Future.delayed(const Duration(milliseconds: 400), () {
+        passwordController.dispose();
+      });
+    });
   }
 
   @override

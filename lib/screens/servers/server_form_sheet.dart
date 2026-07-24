@@ -75,7 +75,8 @@ class _ServerFormSheetState extends State<ServerFormSheet> {
       if (cleanHost.contains('/')) cleanHost = cleanHost.split('/')[0];
       if (cleanHost.contains(':')) cleanHost = cleanHost.split(':')[0];
 
-      final id = widget.existingProfile?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+      // [M1] Use cryptographically secure random ID instead of predictable timestamp
+      final id = widget.existingProfile?.id ?? ServerProfile.generateSecureId();
       String nameVal = _nameController.text.trim().isEmpty ? 'Server $cleanHost' : _nameController.text.trim();
       if (nameVal.length > 25) nameVal = nameVal.substring(0, 25);
       final profile = ServerProfile(

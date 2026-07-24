@@ -47,7 +47,11 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   List<ServerProfile> get profiles => _profiles;
-  ServerProfile? get activeProfile => _activeProfile;
+  // [H2] Public getter returns sanitized profile (no secrets) to prevent credential exposure.
+  // Internal code should use _activeProfile directly when secrets are needed.
+  ServerProfile? get activeProfile => _activeProfile?.sanitized();
+  /// [H2] Provides the stored password for operations that explicitly need it (sudo commands).
+  String get activeProfilePassword => _activeProfile?.password ?? '';
   ConnectionStatus get status => _status;
   bool get isConnected => _status == ConnectionStatus.connected;
   String get errorMessage => _errorMessage;

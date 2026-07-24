@@ -15,6 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final StorageService _storage = StorageService();
 
   bool _appLockEnabled = false;
+  bool _terminalBiometricAuthEnabled = true;
   int _appLockTimeoutSeconds = 60;
   double _terminalFontSize = 14.0;
   int _sshTimeoutSeconds = 25;
@@ -28,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final lock = await _storage.isAppLockEnabled();
+    final terminalBiometric = await _storage.isTerminalBiometricAuthEnabled();
     final appLockTimeout = await _storage.getAppLockTimeoutSeconds();
     final font = await _storage.getTerminalFontSize();
     final timeout = await _storage.getSshTimeoutSeconds();
@@ -35,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() {
         _appLockEnabled = lock;
+        _terminalBiometricAuthEnabled = terminalBiometric;
         _appLockTimeoutSeconds = appLockTimeout;
         _terminalFontSize = font;
         _sshTimeoutSeconds = timeout;
@@ -102,6 +105,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() => _sshTimeoutSeconds = seconds);
     }
+  }
+
+  Future<void> _toggleTerminalBiometricAuth(bool value) async {
+    await _storage.setTerminalBiometricAuthEnabled(value);
+    setState(() {
+      _terminalBiometricAuthEnabled = value;
+    });
   }
 
   Future<void> _changeAppLockTimeout(int seconds) async {
@@ -216,6 +226,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           secondary: Icon(
                             _appLockEnabled ? Icons.lock : Icons.lock_open,
                             color: _appLockEnabled ? AppTheme.neonCyan : Colors.white38,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      Divider(color: AppTheme.cardBorder.withValues(alpha: 0.5), height: 1),
+                      Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(16),
+                        child: SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          activeThumbColor: AppTheme.neonCyan,
+                          activeTrackColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+                          title: Text('Terminal Biometric Auth', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          subtitle: Text(
+                            'Require fingerprint or face unlock before opening the unrestricted interactive SSH terminal.',
+                            style: GoogleFonts.outfit(color: Colors.white60, fontSize: 13),
+                          ),
+                          value: _terminalBiometricAuthEnabled,
+                          onChanged: _toggleTerminalBiometricAuth,
+                          secondary: Icon(
+                            _terminalBiometricAuthEnabled ? Icons.fingerprint : Icons.fingerprint_outlined,
+                            color: _terminalBiometricAuthEnabled ? AppTheme.neonCyan : Colors.white38,
                             size: 28,
                           ),
                         ),

@@ -43,10 +43,11 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
   Future<String?> _getSudoPassword(BuildContext context, {bool forceConfirmation = false, String actionName = 'Root Crontab Access', String? exactCommand}) async {
     final provider = Provider.of<ServerProvider>(context, listen: false);
-    final storedPwd = provider.activeProfile?.password ?? '';
-    if (!forceConfirmation && storedPwd.isNotEmpty) return storedPwd;
-
-    final passwordController = TextEditingController(text: storedPwd);
+    if (!forceConfirmation) {
+      return provider.activeProfilePassword;
+    }
+    // [H1] Always require user to type sudo password in dialog — never pre-populate
+    final passwordController = TextEditingController();
     final res = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -127,7 +128,9 @@ class _CronManagerSectionState extends State<CronManagerSection> {
         ],
       ),
     );
-    passwordController.dispose();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      passwordController.dispose();
+    });
     return res;
   }
 
@@ -377,6 +380,20 @@ class _CronManagerSectionState extends State<CronManagerSection> {
   }
 
   Future<void> _runJobNow(CronJob job) async {
+    // [C4] Validate cron command before executing — even if it came from the server's crontab
+    final validation = CommandValidator.validateCronJob(job.schedule, job.command, isRoot: job.isRoot);
+    if (validation.isBlocked) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.crimson,
+            content: Text('Security: cannot execute this command — ${validation.message}'),
+          ),
+        );
+      }
+      return;
+    }
+
     final provider = Provider.of<ServerProvider>(context, listen: false);
     setState(() {
       _isExecutingNow = true;

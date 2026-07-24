@@ -1,3 +1,5 @@
+import 'dart:math';
+
 class ServerProfile {
   final String id;
   final String name;
@@ -26,6 +28,24 @@ class ServerProfile {
     this.cloudflareClientId = '',
     this.cloudflareClientSecret = '',
   });
+
+  /// [M1] Generate a cryptographically secure random ID (32 hex chars)
+  static String generateSecureId() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  /// [H2] Returns a copy of this profile with all secrets cleared.
+  /// Use this for public-facing getters to avoid credential exposure.
+  ServerProfile sanitized() {
+    return copyWith(
+      password: '',
+      privateKey: '',
+      cloudflareClientId: '',
+      cloudflareClientSecret: '',
+    );
+  }
 
   ServerProfile copyWith({
     String? id,
@@ -69,7 +89,8 @@ class ServerProfile {
       'useAuthKey': useAuthKey,
       'customUpdateCommand': customUpdateCommand,
       'useCloudflareTunnel': useCloudflareTunnel,
-      'cloudflareClientId': cloudflareClientId,
+      // [M4] cloudflareClientId is now treated as sensitive — stripped unless includeSecrets
+      'cloudflareClientId': includeSecrets ? cloudflareClientId : '',
       'cloudflareClientSecret': includeSecrets ? cloudflareClientSecret : '',
     };
   }
