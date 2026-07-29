@@ -226,49 +226,46 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // Docker actions
-  Future<bool> startContainer(String id) async {
+  // Docker actions — return null on success, error message string on failure
+  Future<String?> startContainer(String id) async {
     _isLoadingAction = true;
     notifyListeners();
     try {
       await _sshService.startContainer(id);
       await refreshData(silent: true);
-      return true;
+      return null;
     } catch (e) {
-      _errorMessage = 'Unable to start container: $e';
-      return false;
+      return 'Unable to start container: ${e.toString().replaceAll('Exception: ', '')}';
     } finally {
       _isLoadingAction = false;
       notifyListeners();
     }
   }
 
-  Future<bool> stopContainer(String id) async {
+  Future<String?> stopContainer(String id) async {
     _isLoadingAction = true;
     notifyListeners();
     try {
       await _sshService.stopContainer(id);
       await refreshData(silent: true);
-      return true;
+      return null;
     } catch (e) {
-      _errorMessage = 'Unable to stop container: $e';
-      return false;
+      return 'Unable to stop container: ${e.toString().replaceAll('Exception: ', '')}';
     } finally {
       _isLoadingAction = false;
       notifyListeners();
     }
   }
 
-  Future<bool> restartContainer(String id) async {
+  Future<String?> restartContainer(String id) async {
     _isLoadingAction = true;
     notifyListeners();
     try {
       await _sshService.restartContainer(id);
       await refreshData(silent: true);
-      return true;
+      return null;
     } catch (e) {
-      _errorMessage = 'Unable to restart container: $e';
-      return false;
+      return 'Unable to restart container: ${e.toString().replaceAll('Exception: ', '')}';
     } finally {
       _isLoadingAction = false;
       notifyListeners();

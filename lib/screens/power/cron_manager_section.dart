@@ -23,6 +23,9 @@ class _CronManagerSectionState extends State<CronManagerSection> {
   String? _activeExecutionOutput;
   bool _isExecutingNow = false;
   int _logDaysFilter = 7;
+  /// Incremented on every _fetchCronJobs call to invalidate stale async results
+  /// when the user switches tabs (root ↔ user) during a fetch.
+  int _fetchGeneration = 0;
   final ScrollController _execScrollController = ScrollController();
 
   void _scrollExecToBottom() {
@@ -172,6 +175,13 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     final provider = Provider.of<ServerProvider>(context, listen: false);
     if (!provider.isConnected) return;
 
+    // [SECURITY] Increment generation to invalidate any in-flight fetch from a
+    // previous tab. If the user switches root↔user mid-fetch, the stale async
+    // result will be discarded instead of displayed under the wrong privilege level.
+    _fetchGeneration++;
+    final myGeneration = _fetchGeneration;
+    final fetchIsRoot = _isRootTab;
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -182,10 +192,10 @@ class _CronManagerSectionState extends State<CronManagerSection> {
       String? sudoPwd;
 
       // Step 1: Fetch crontab only (no bulk log fetch needed)
-      if (_isRootTab) {
+      if (fetchIsRoot) {
         sudoPwd = await _getSudoPassword(context, forceConfirmation: false, actionName: 'Read Root Crontab');
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
-          setState(() => _isLoading = false);
+          if (_fetchGeneration == myGeneration) setState(() => _isLoading = false);
           return;
         }
         crontabText = await provider.executeSudoCommand('crontab -l 2>/dev/null || true', sudoPwd ?? '');
@@ -193,8 +203,11 @@ class _CronManagerSectionState extends State<CronManagerSection> {
         crontabText = await provider.executeCommand('crontab -l 2>/dev/null || true');
       }
 
+      // [SECURITY] Discard results if the user switched tabs during the async fetch
+      if (_fetchGeneration != myGeneration) return;
+
       // Step 2: Parse crontab entries (without logs)
-      final parsedJobs = _parseCrontab(crontabText, _isRootTab);
+      final parsedJobs = _parseCrontab(crontabText, fetchIsRoot);
 
       // Step 3: Per-job targeted log search using unique command tokens.
       // Each job gets its own grep against journalctl/syslog, strictly within _logDaysFilter.
@@ -202,7 +215,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
       final String daysAgo = _logDaysFilter == 1 ? '1 day' : '$_logDaysFilter days';
 
       for (int idx = 0; idx < parsedJobs.length; idx++) {
-        if (!mounted) break;
+        if (!mounted || _fetchGeneration != myGeneration) break;
         final job = parsedJobs[idx];
 
         // Skip @reboot jobs — they don't produce periodic log entries
@@ -225,11 +238,14 @@ class _CronManagerSectionState extends State<CronManagerSection> {
               'line=\$(grep -h -i "$grepPattern" /var/log/syslog /var/log/cron /var/log/cron.log 2>/dev/null | tail -n 1); '
               'fi; echo "\$line"';
 
-          if (_isRootTab) {
+          if (fetchIsRoot) {
             targetedLog = await provider.executeSudoCommand(searchCmd, sudoPwd ?? '');
           } else {
             targetedLog = await provider.executeCommand(searchCmd);
           }
+
+          // [SECURITY] Check again after each async call
+          if (_fetchGeneration != myGeneration) return;
 
           final trimmed = targetedLog.trim();
           if (trimmed.isNotEmpty && _matchLogToCommand(trimmed, job.command)) {
@@ -255,14 +271,15 @@ class _CronManagerSectionState extends State<CronManagerSection> {
         }
       }
 
-      if (mounted) {
+      // [SECURITY] Final check before applying results to UI state
+      if (mounted && _fetchGeneration == myGeneration) {
         setState(() {
           _jobs = parsedJobs;
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && _fetchGeneration == myGeneration) {
         setState(() {
           _errorMessage = 'Error reading crontab: $e';
           _isLoading = false;

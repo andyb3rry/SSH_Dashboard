@@ -28,6 +28,65 @@ class _PowerControlTabState extends State<PowerControlTab> {
     });
   }
 
+  /// Filters noisy output lines from streamed system update chunks.
+  /// Supports: Debian/Ubuntu (apt/debconf), Fedora/RHEL (dnf/yum),
+  /// Arch (pacman), openSUSE (zypper), and general noise patterns.
+  String _filterUpdateOutput(String chunk) {
+    final lines = chunk.split('\n');
+    final filtered = <String>[];
+    bool lastLineWasEmpty = false;
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+
+      // --- General noise ---
+      // Collapse consecutive empty lines
+      if (trimmed.isEmpty) {
+        if (lastLineWasEmpty) continue;
+        lastLineWasEmpty = true;
+        filtered.add(line);
+        continue;
+      }
+      lastLineWasEmpty = false;
+
+      // --- Debian / Ubuntu (apt / dpkg / debconf) ---
+      if (trimmed.startsWith('WARNING: apt does not have a stable CLI interface')) continue;
+      if (trimmed.startsWith('debconf: unable to initialize frontend:')) continue;
+      if (trimmed.startsWith('debconf: (') && trimmed.endsWith(')')) continue;
+      if (trimmed.startsWith('debconf: falling back to frontend:')) continue;
+      // Intermediate dpkg "Reading database" progress (keep 100% and final count line)
+      if (RegExp(r'^\(Reading database \.\.\. \d+%$').hasMatch(trimmed)) continue;
+      if (trimmed == 'Preconfiguring packages ...') continue;
+
+      // --- Fedora / RHEL / CentOS (dnf / yum) ---
+      // Metadata expiration check noise
+      if (trimmed.startsWith('Last metadata expiration check:')) continue;
+      // GPG key import noise lines
+      if (trimmed.startsWith('Importing GPG key')) continue;
+      if (trimmed.startsWith('Key imported successfully')) continue;
+      // Download progress lines (e.g. "Updates    [===   ] ---")
+      if (RegExp(r'^\S+\s+\[=*\s*\]\s').hasMatch(trimmed)) continue;
+      // dnf/yum progress bar lines with percentages and speed
+      if (RegExp(r'^\(\d+/\d+\):\s+\S+.*\s+\d+(\.\d+)?\s*(kB|MB|B)/s').hasMatch(trimmed)) continue;
+
+      // --- Arch Linux (pacman) ---
+      // Progress percentage lines for keyring, integrity, package loading
+      if (RegExp(r'^\(\s*\d+/\d+\)\s+(checking keys in keyring|checking package integrity|loading package files|checking for file conflicts|checking available disk space)').hasMatch(trimmed)) continue;
+      // pacman download/install progress bars (e.g. " downloading linux   [####----] 45%")
+      if (RegExp(r'^\s*(downloading|installing|upgrading|removing)\s+\S+.*\[#+\-*\]\s*\d+%').hasMatch(trimmed)) continue;
+      // pacman ":: Retrieving packages..." percentage lines
+      if (RegExp(r'^::\s+Retrieving packages\s*\.\.\.').hasMatch(trimmed)) continue;
+
+      // --- openSUSE (zypper) ---
+      // Zypper progress lines "Loading repository data..."
+      if (trimmed.startsWith('Loading repository data...')) continue;
+      if (trimmed.startsWith('Reading installed packages...')) continue;
+
+      filtered.add(line);
+    }
+    return filtered.join('\n');
+  }
+
   @override
   void dispose() {
     _updateLogsScrollController.dispose();
@@ -284,18 +343,24 @@ class _PowerControlTabState extends State<PowerControlTab> {
                       pwd,
                       onStdout: (chunk) {
                         if (mounted) {
-                          setState(() {
-                            _updateLogs += chunk;
-                          });
-                          _scrollUpdateLogsToBottom();
+                          final filtered = _filterUpdateOutput(chunk);
+                          if (filtered.trim().isNotEmpty) {
+                            setState(() {
+                              _updateLogs += filtered;
+                            });
+                            _scrollUpdateLogsToBottom();
+                          }
                         }
                       },
                       onStderr: (chunk) {
                         if (mounted) {
-                          setState(() {
-                            _updateLogs += chunk;
-                          });
-                          _scrollUpdateLogsToBottom();
+                          final filtered = _filterUpdateOutput(chunk);
+                          if (filtered.trim().isNotEmpty) {
+                            setState(() {
+                              _updateLogs += filtered;
+                            });
+                            _scrollUpdateLogsToBottom();
+                          }
                         }
                       },
                     );

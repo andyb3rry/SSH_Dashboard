@@ -748,7 +748,7 @@ df -mP | awk 'NR>1 && (\$6 == "/" || \$6 ~ /^\\/mnt/) && !/tmpfs|cdrom|devtmpfs|
       if (sudoPassword.isNotEmpty) {
         session.stdin.add(utf8.encode('$sudoPassword\n'));
       }
-      session.stdin.add(utf8.encode('echo \'$base64Cmd\' | base64 -d | sh\nexit\n'));
+      session.stdin.add(utf8.encode('export DEBIAN_FRONTEND=noninteractive; echo \'$base64Cmd\' | base64 -d | sh\nexit\n'));
       await session.stdin.close();
 
       final outputBuffer = StringBuffer();

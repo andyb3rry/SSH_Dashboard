@@ -234,7 +234,14 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
                                         IconButton(
                                           icon: const Icon(Icons.refresh, color: AppTheme.amber),
                                           tooltip: 'Restart Container',
-                                          onPressed: () => provider.restartContainer(container.id),
+                                          onPressed: () async {
+                                            final error = await provider.restartContainer(container.id);
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                              backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
+                                              content: Text(error ?? '✓ ${container.name} restarted'),
+                                            ));
+                                          },
                                         ),
                                         const SizedBox(width: 6),
                                         ElevatedButton.icon(
@@ -244,7 +251,14 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
                                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                             side: const BorderSide(color: AppTheme.crimson),
                                           ),
-                                          onPressed: () => provider.stopContainer(container.id),
+                                          onPressed: () async {
+                                            final error = await provider.stopContainer(container.id);
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                              backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
+                                              content: Text(error ?? '✓ ${container.name} stopped'),
+                                            ));
+                                          },
                                           icon: const Icon(Icons.stop, size: 16),
                                           label: const Text('Stop'),
                                         ),
@@ -256,7 +270,14 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
                                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                             side: const BorderSide(color: AppTheme.emerald),
                                           ),
-                                          onPressed: () => provider.startContainer(container.id),
+                                          onPressed: () async {
+                                            final error = await provider.startContainer(container.id);
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                              backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
+                                              content: Text(error ?? '✓ ${container.name} started'),
+                                            ));
+                                          },
                                           icon: const Icon(Icons.play_arrow, size: 16),
                                           label: const Text('Start'),
                                         ),
