@@ -19,7 +19,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _appLockTimeoutSeconds = 60;
   double _terminalFontSize = 14.0;
   int _sshTimeoutSeconds = 25;
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -41,7 +40,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _appLockTimeoutSeconds = appLockTimeout;
         _terminalFontSize = font;
         _sshTimeoutSeconds = timeout;
-        _isLoading = false;
       });
     }
   }
@@ -195,9 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-          : ListView(
+      body: ListView(
               padding: const EdgeInsets.all(16),
               children: [
                 _buildSectionTitle('SECURITY & ACCESS'),

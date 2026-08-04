@@ -14,12 +14,29 @@ class AppTheme {
   static const Color crimson = Color(0xFFFF3B30);
   static const Color amber = Color(0xFFFFB300);
 
+  // ── Costanti Animazione globali ──
+  static const Duration animFast = Duration(milliseconds: 200);
+  static const Duration animNormal = Duration(milliseconds: 350);
+  static const Duration animSlow = Duration(milliseconds: 500);
+  static const Duration animGauge = Duration(milliseconds: 600);
+  static const Curve animCurve = Curves.easeOutCubic;
+  static const Curve animCurveEnter = Curves.easeOutQuart;
+
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: obsidian,
       primaryColor: neonCyan,
+      pageTransitionsTheme: PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: const PredictiveBackPageTransitionsBuilder(),
+          TargetPlatform.iOS: const ZoomPageTransitionsBuilder(),
+          TargetPlatform.linux: const FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: const ZoomPageTransitionsBuilder(),
+          TargetPlatform.windows: const FadeUpwardsPageTransitionsBuilder(),
+        },
+      ),
       colorScheme: const ColorScheme.dark(
         primary: neonCyan,
         secondary: neonPurple,

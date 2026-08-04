@@ -26,14 +26,22 @@ class GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget content = Container(
+    final effectiveBorderColor = borderColor ??
+        (isGlow
+            ? AppTheme.neonCyan.withValues(alpha: 0.6)
+            : AppTheme.cardBorder);
+    final effectiveBorderWidth = isGlow ? 1.5 : 1.0;
+
+    Widget content = AnimatedContainer(
+      duration: AppTheme.animNormal,
+      curve: AppTheme.animCurve,
       padding: padding,
       decoration: BoxDecoration(
         color: (backgroundColor ?? AppTheme.surfaceDark).withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: borderColor ?? (isGlow ? AppTheme.neonCyan.withValues(alpha: 0.6) : AppTheme.cardBorder),
-          width: isGlow ? 1.5 : 1.0,
+          color: effectiveBorderColor,
+          width: effectiveBorderWidth,
         ),
         boxShadow: [
           if (isGlow)

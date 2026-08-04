@@ -34,7 +34,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> with WidgetsBindingObserver {
-  int _currentIndex = 0;
+  int _currentIndex = 3; // 3 = Servers (default tab)
   late final PageController _pageController;
   bool _isUnlocked = false;
 
@@ -79,8 +79,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     if (_pageController.hasClients) {
       _pageController.animateToPage(
         idx,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        duration: AppTheme.animNormal,
+        curve: AppTheme.animCurve,
       );
     }
   }
@@ -463,9 +463,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     if (mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => const InteractiveShellSheet(),
+        PageRouteBuilder(
           fullscreenDialog: true,
+          transitionDuration: AppTheme.animNormal,
+          reverseTransitionDuration: AppTheme.animFast,
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const InteractiveShellSheet(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: AppTheme.animCurve,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.08),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              ),
+            );
+          },
         ),
       );
     }
@@ -590,7 +609,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                PageRouteBuilder(
+                  transitionDuration: AppTheme.animNormal,
+                  reverseTransitionDuration: AppTheme.animFast,
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      const SettingsScreen(),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                    final curved = CurvedAnimation(
+                      parent: animation,
+                      curve: AppTheme.animCurve,
+                    );
+                    return FadeTransition(
+                      opacity: curved,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.05),
+                          end: Offset.zero,
+                        ).animate(curved),
+                        child: child,
+                      ),
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -601,6 +642,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         children: [
           PageView(
             controller: _pageController,
+            physics: const BouncingScrollPhysics(),
+            allowImplicitScrolling: true,
             onPageChanged: (idx) => setState(() => _currentIndex = idx),
             children: _tabs,
           ),
@@ -738,31 +781,38 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             child: Center(
               child: GestureDetector(
                 onTap: _openTerminal,
-                child: Container(
-                  width: fabSize,
-                  height: fabSize,
-                  decoration: BoxDecoration(
-                    color: isConnected ? AppTheme.neonCyan : AppTheme.cardBorder,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: isConnected
-                        ? [
-                            BoxShadow(
-                              color: AppTheme.neonCyan.withValues(alpha: 0.4),
-                              blurRadius: 12,
-                              spreadRadius: 2,
-                            ),
-                          ]
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 6,
-                            ),
-                          ],
-                  ),
-                  child: Icon(
-                    Icons.terminal,
-                    size: 28,
-                    color: isConnected ? AppTheme.obsidian : Colors.white38,
+                child: AnimatedScale(
+                  scale: isConnected ? 1.0 : 0.9,
+                  duration: AppTheme.animNormal,
+                  curve: AppTheme.animCurve,
+                  child: AnimatedContainer(
+                    duration: AppTheme.animNormal,
+                    curve: AppTheme.animCurve,
+                    width: fabSize,
+                    height: fabSize,
+                    decoration: BoxDecoration(
+                      color: isConnected ? AppTheme.neonCyan : AppTheme.cardBorder,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: isConnected
+                          ? [
+                              BoxShadow(
+                                color: AppTheme.neonCyan.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                blurRadius: 6,
+                              ),
+                            ],
+                    ),
+                    child: Icon(
+                      Icons.terminal,
+                      size: 28,
+                      color: isConnected ? AppTheme.obsidian : Colors.white38,
+                    ),
                   ),
                 ),
               ),
@@ -775,24 +825,42 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
 
   Widget _buildNavItem({required IconData icon, required IconData activeIcon, required String label, required int idx}) {
     final selected = _currentIndex == idx;
-    final color = selected ? AppTheme.neonCyan : Colors.white54;
 
     return InkWell(
       onTap: () => navigateToTab(idx),
       borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: AnimatedContainer(
+        duration: AppTheme.animFast,
+        curve: AppTheme.animCurve,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppTheme.neonCyan.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(selected ? activeIcon : icon, color: color, size: 24),
+            // Removed AnimatedSwitcher to prevent DuplicateKey crash on rapid toggling
+            Icon(
+              selected ? activeIcon : icon,
+              color: selected ? AppTheme.neonCyan : Colors.white54,
+              size: 24,
+            ),
             const SizedBox(height: 2),
-            Text(
-              label,
+            AnimatedDefaultTextStyle(
+              duration: AppTheme.animFast,
               style: GoogleFonts.outfit(
-                color: color,
+                color: selected ? AppTheme.neonCyan : Colors.white54,
                 fontSize: 11,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: FontWeight.w600, // Fixed weight to prevent layout shift/overflow
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
               ),
             ),
           ],
