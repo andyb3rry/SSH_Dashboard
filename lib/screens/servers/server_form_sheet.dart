@@ -158,7 +158,11 @@ class _ServerFormSheetState extends State<ServerFormSheet> {
                     child: TextFormField(
                       controller: _hostController,
                       style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),
-                      validator: (val) => (val == null || val.trim().isEmpty) ? 'Enter Host/IP' : null,
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) return 'Enter Host/IP';
+                        if (!ServerProfile.isValidHost(val.trim())) return 'Invalid Host/IP format';
+                        return null;
+                      },
                       decoration: InputDecoration(
                         labelText: 'Host / IP *',
                         labelStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14),

@@ -445,7 +445,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 40),
                 Center(
                   child: Text(
-                    'SSH Dashboard • v1.2.0 (Security Hardened)',
+                    'SSH Dashboard • v1.0.0',
                     style: GoogleFonts.outfit(color: Colors.white30, fontSize: 12),
                   ),
                 ),

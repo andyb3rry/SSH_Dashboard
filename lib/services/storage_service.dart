@@ -27,11 +27,13 @@ class StorageService {
         final secureCfSecret = await _secureStorage.read(key: 'cf_secret_${profile.id}');
         // [M4] cloudflareClientId is now also stored in secure storage
         final secureCfClientId = await _secureStorage.read(key: 'cf_client_id_${profile.id}');
+        final secureUpdateCmd = await _secureStorage.read(key: 'custom_update_cmd_${profile.id}');
         
         String finalPwd = securePwd ?? profile.password;
         String finalKey = secureKey ?? profile.privateKey;
         String finalCfSecret = secureCfSecret ?? profile.cloudflareClientSecret;
         String finalCfClientId = secureCfClientId ?? profile.cloudflareClientId;
+        String finalUpdateCmd = secureUpdateCmd ?? (profile.customUpdateCommand.isEmpty ? 'sudo apt update && sudo apt upgrade -y' : profile.customUpdateCommand);
         
         // Migrazione trasparente: se troviamo password, chiave privata, client ID o client secret nel vecchio JSON su SharedPreferences,
         // le salviamo subito in KeyStore/Keychain e segniamo che SharedPreferences va ripulito dai segreti.
@@ -52,13 +54,17 @@ class StorageService {
           await _secureStorage.write(key: 'cf_client_id_${profile.id}', value: profile.cloudflareClientId);
           needsSanitizeMigration = true;
         }
-        if (profile.password.isNotEmpty || profile.privateKey.isNotEmpty || profile.cloudflareClientSecret.isNotEmpty || profile.cloudflareClientId.isNotEmpty) {
+        if (secureUpdateCmd == null && profile.customUpdateCommand != 'sudo apt update && sudo apt upgrade -y') {
+          await _secureStorage.write(key: 'custom_update_cmd_${profile.id}', value: profile.customUpdateCommand);
+          needsSanitizeMigration = true;
+        }
+        if (profile.password.isNotEmpty || profile.privateKey.isNotEmpty || profile.cloudflareClientSecret.isNotEmpty || profile.cloudflareClientId.isNotEmpty || profile.customUpdateCommand != 'sudo apt update && sudo apt upgrade -y') {
           needsSanitizeMigration = true;
         }
 
-        profiles.add(profile.copyWith(password: finalPwd, privateKey: finalKey, cloudflareClientSecret: finalCfSecret, cloudflareClientId: finalCfClientId));
+        profiles.add(profile.copyWith(password: finalPwd, privateKey: finalKey, cloudflareClientSecret: finalCfSecret, cloudflareClientId: finalCfClientId, customUpdateCommand: finalUpdateCmd));
       } catch (e) {
-        // Ignora eventuali profili corrotti
+        throw Exception('Security Error: Corrupted or tampered profile detected. Parsing failed.');
       }
     }
 
@@ -92,6 +98,11 @@ class StorageService {
     } else {
       await _secureStorage.delete(key: 'cf_client_id_${profile.id}');
     }
+    if (profile.customUpdateCommand.isNotEmpty) {
+      await _secureStorage.write(key: 'custom_update_cmd_${profile.id}', value: profile.customUpdateCommand);
+    } else {
+      await _secureStorage.delete(key: 'custom_update_cmd_${profile.id}');
+    }
 
     // 2. Manteniamo la lista dei profili salvando su SharedPreferences SOLO i metadati non sensibili
     final profiles = await getProfiles();
@@ -115,6 +126,7 @@ class StorageService {
     await _secureStorage.delete(key: 'cf_secret_$id');
     // [M4] Remove cloudflareClientId from secure storage
     await _secureStorage.delete(key: 'cf_client_id_$id');
+    await _secureStorage.delete(key: 'custom_update_cmd_$id');
 
     final activeId = await getActiveServerId();
     if (activeId == id) {
@@ -125,8 +137,8 @@ class StorageService {
 
   Future<void> _saveAll(List<ServerProfile> profiles) async {
     final prefs = await SharedPreferences.getInstance();
-    // [M4] Prima di salvare in SharedPreferences svuotiamo SEMPRE password, privateKey, cloudflareClientId e cloudflareClientSecret
-    final sanitizedList = profiles.map((p) => jsonEncode(p.copyWith(password: '', privateKey: '', cloudflareClientId: '', cloudflareClientSecret: '').toJson())).toList();
+    // [M4] Prima di salvare in SharedPreferences svuotiamo SEMPRE i segreti
+    final sanitizedList = profiles.map((p) => jsonEncode(p.sanitized().toJson())).toList();
     await prefs.setStringList(_profilesKey, sanitizedList);
   }
 

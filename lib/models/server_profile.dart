@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../utils/command_validator.dart';
 
 class ServerProfile {
   final String id;
@@ -47,6 +48,19 @@ class ServerProfile {
     );
   }
 
+  /// Validates if a given host is a valid IP address or FQDN
+  static bool isValidHost(String host) {
+    if (host.isEmpty) return false;
+    // Basic IP validation
+    final ipRegExp = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
+    // IPv6 validation
+    final ipv6RegExp = RegExp(r'^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$');
+    // Basic FQDN/Hostname validation
+    final fqdnRegExp = RegExp(r'^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))*$');
+    
+    return ipRegExp.hasMatch(host) || fqdnRegExp.hasMatch(host) || ipv6RegExp.hasMatch(host) || host == 'localhost';
+  }
+
   ServerProfile copyWith({
     String? id,
     String? name,
@@ -87,7 +101,7 @@ class ServerProfile {
       'password': includeSecrets ? password : '',
       'privateKey': includeSecrets ? privateKey : '',
       'useAuthKey': useAuthKey,
-      'customUpdateCommand': customUpdateCommand,
+      'customUpdateCommand': includeSecrets ? customUpdateCommand : '',
       'useCloudflareTunnel': useCloudflareTunnel,
       // [M4] cloudflareClientId is now treated as sensitive — stripped unless includeSecrets
       'cloudflareClientId': includeSecrets ? cloudflareClientId : '',
@@ -96,16 +110,29 @@ class ServerProfile {
   }
 
   factory ServerProfile.fromJson(Map<String, dynamic> json) {
+    String parsedHost = json['host']?.toString() ?? '';
+    if (!isValidHost(parsedHost)) {
+      parsedHost = ''; // Reset invalid host to prevent SSRF
+    }
+
+    String parsedCommand = json['customUpdateCommand']?.toString() ?? 'sudo apt update && sudo apt upgrade -y';
+    if (parsedCommand.isNotEmpty && parsedCommand != 'sudo apt update && sudo apt upgrade -y') {
+      final validation = CommandValidator.validateUpdateCommand(parsedCommand);
+      if (validation.isBlocked) {
+        parsedCommand = 'sudo apt update && sudo apt upgrade -y'; // Fallback to safe default
+      }
+    }
+
     return ServerProfile(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Unnamed Server',
-      host: json['host']?.toString() ?? '',
+      host: parsedHost,
       port: (json['port'] is int) ? json['port'] : int.tryParse(json['port']?.toString() ?? '22') ?? 22,
       username: json['username']?.toString() ?? '',
       password: json['password']?.toString() ?? '',
       privateKey: json['privateKey']?.toString() ?? '',
       useAuthKey: json['useAuthKey'] == true,
-      customUpdateCommand: json['customUpdateCommand']?.toString() ?? 'sudo apt update && sudo apt upgrade -y',
+      customUpdateCommand: parsedCommand,
       useCloudflareTunnel: json['useCloudflareTunnel'] == true,
       cloudflareClientId: json['cloudflareClientId']?.toString() ?? '',
       cloudflareClientSecret: json['cloudflareClientSecret']?.toString() ?? '',

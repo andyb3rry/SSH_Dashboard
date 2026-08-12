@@ -46,12 +46,20 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
     };
   }
 
-  List<ServerProfile> get profiles => _profiles;
+  List<ServerProfile> get profiles => _profiles.map((p) => p.sanitized()).toList();
   // [H2] Public getter returns sanitized profile (no secrets) to prevent credential exposure.
   // Internal code should use _activeProfile directly when secrets are needed.
   ServerProfile? get activeProfile => _activeProfile?.sanitized();
-  /// [H2] Provides the stored password for operations that explicitly need it (sudo commands).
-  String get activeProfilePassword => _activeProfile?.password ?? '';
+
+  /// Retrieves the full, non-sanitized profile containing secrets (password, keys, etc.).
+  /// Must only be used when explicitly required (e.g., editing a profile or connecting).
+  ServerProfile? getFullProfile(String id) {
+    try {
+      return _profiles.firstWhere((p) => p.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
   ConnectionStatus get status => _status;
   bool get isConnected => _status == ConnectionStatus.connected;
   String get errorMessage => _errorMessage;
@@ -289,7 +297,9 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
     stopPolling();
     try {
       await _sshService.rebootServer(sudoPassword);
-    } catch (_) {}
+    } catch (e) {
+      _errorMessage = 'Reboot failed: ${e.toString()}';
+    }
     _status = ConnectionStatus.disconnected;
     notifyListeners();
   }
@@ -298,7 +308,9 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
     stopPolling();
     try {
       await _sshService.shutdownServer(sudoPassword);
-    } catch (_) {}
+    } catch (e) {
+      _errorMessage = 'Shutdown failed: ${e.toString()}';
+    }
     _status = ConnectionStatus.disconnected;
     notifyListeners();
   }

@@ -44,11 +44,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     });
   }
 
-  Future<String?> _getSudoPassword(BuildContext context, {bool forceConfirmation = false, String actionName = 'Root Crontab Access', String? exactCommand}) async {
-    final provider = Provider.of<ServerProvider>(context, listen: false);
-    if (!forceConfirmation) {
-      return provider.activeProfilePassword;
-    }
+  Future<String?> _getSudoPassword(BuildContext context, {String actionName = 'Root Crontab Access', String? exactCommand}) async {
     // [H1] Always require user to type sudo password in dialog — never pre-populate
     final passwordController = TextEditingController();
     final res = await showDialog<String>(
@@ -193,12 +189,9 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
       // Step 1: Fetch crontab only (no bulk log fetch needed)
       if (fetchIsRoot) {
-        sudoPwd = await _getSudoPassword(context, forceConfirmation: false, actionName: 'Read Root Crontab');
-        if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
-          if (_fetchGeneration == myGeneration) setState(() => _isLoading = false);
-          return;
-        }
-        crontabText = await provider.executeSudoCommand('crontab -l 2>/dev/null || true', sudoPwd ?? '');
+        final fullProfile = provider.getFullProfile(provider.activeProfile!.id);
+        sudoPwd = fullProfile?.password ?? '';
+        crontabText = await provider.executeSudoCommand('crontab -l 2>/dev/null || true', sudoPwd);
       } else {
         crontabText = await provider.executeCommand('crontab -l 2>/dev/null || true');
       }
@@ -421,7 +414,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
     try {
       String output = '';
       if (job.isRoot) {
-        final sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: 'Instant Execution (${job.humanReadableSchedule})', exactCommand: job.command);
+        final sudoPwd = await _getSudoPassword(context, actionName: 'Instant Execution (${job.humanReadableSchedule})', exactCommand: job.command);
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() {
             _isExecutingNow = false;
@@ -697,7 +690,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
       if (_isRootTab) {
         if (!mounted) return;
-        sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: oldJob != null ? 'Edit Root Cron Job' : 'Add Root Cron Job', exactCommand: newLine);
+        sudoPwd = await _getSudoPassword(context, actionName: oldJob != null ? 'Edit Root Cron Job' : 'Add Root Cron Job', exactCommand: newLine);
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() => _isLoading = false);
           return;
@@ -775,7 +768,7 @@ class _CronManagerSectionState extends State<CronManagerSection> {
 
       if (_isRootTab) {
         if (!mounted) return;
-        sudoPwd = await _getSudoPassword(context, forceConfirmation: true, actionName: 'Delete Root Cron Job', exactCommand: 'DELETE: ${job.rawLine}');
+        sudoPwd = await _getSudoPassword(context, actionName: 'Delete Root Cron Job', exactCommand: 'DELETE: ${job.rawLine}');
         if (sudoPwd == null && (provider.activeProfile?.password ?? '').isEmpty) {
           setState(() => _isLoading = false);
           return;

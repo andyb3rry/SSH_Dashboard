@@ -24,6 +24,7 @@
 -dontwarn javax.annotation.**
 -dontwarn kotlin.**
 -dontwarn kotlinx.**
+-dontwarn com.google.android.play.core.**
 
 # Preserve line number information for debugging stack traces
 -keepattributes SourceFile,LineNumberTable

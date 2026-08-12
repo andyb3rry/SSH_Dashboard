@@ -311,7 +311,12 @@ class _ServerListScreenState extends State<ServerListScreen> {
                               icon: const Icon(Icons.more_vert, color: Colors.white70),
                               color: AppTheme.surfaceDark,
                               onSelected: (val) {
-                                if (val == 'edit') _openForm(context, profile);
+                                if (val == 'edit') {
+                                  final fullProfile = provider.getFullProfile(profile.id);
+                                  if (fullProfile != null) {
+                                    _openForm(context, fullProfile);
+                                  }
+                                }
                                 if (val == 'delete') _confirmDelete(context, profile);
                               },
                               itemBuilder: (_) => [
@@ -383,9 +388,12 @@ class _ServerListScreenState extends State<ServerListScreen> {
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: () async {
-                                    await provider.connect(profile);
-                                    if (context.mounted && widget.isModalSelection && provider.status == ConnectionStatus.connected) {
-                                      Navigator.pop(context);
+                                    final fullProfile = provider.getFullProfile(profile.id);
+                                    if (fullProfile != null) {
+                                      await provider.connect(fullProfile);
+                                      if (context.mounted && widget.isModalSelection && provider.status == ConnectionStatus.connected) {
+                                        Navigator.pop(context);
+                                      }
                                     }
                                   },
                                   icon: const Icon(Icons.bolt, size: 20),
