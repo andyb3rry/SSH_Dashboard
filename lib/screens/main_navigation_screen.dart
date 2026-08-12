@@ -552,6 +552,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     const double barRadius = 20.0;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBody: true,
       appBar: AppBar(
         title: Row(
