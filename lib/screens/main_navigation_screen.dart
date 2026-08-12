@@ -75,13 +75,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
 
   void navigateToTab(int idx) {
     if (_currentIndex == idx) return;
-    setState(() => _currentIndex = idx);
+    
     if (_pageController.hasClients) {
       _pageController.animateToPage(
         idx,
         duration: AppTheme.animNormal,
         curve: AppTheme.animCurve,
       );
+    } else {
+      setState(() => _currentIndex = idx);
     }
   }
 
