@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../utils/command_validator.dart';
+import 'custom_command.dart';
 
 class ServerProfile {
   final String id;
@@ -14,6 +15,7 @@ class ServerProfile {
   final bool useCloudflareTunnel;
   final String cloudflareClientId;
   final String cloudflareClientSecret;
+  final List<CustomCommand> customCommands;
 
   ServerProfile({
     required this.id,
@@ -28,6 +30,7 @@ class ServerProfile {
     this.useCloudflareTunnel = false,
     this.cloudflareClientId = '',
     this.cloudflareClientSecret = '',
+    this.customCommands = const [],
   });
 
   /// [M1] Generate a cryptographically secure random ID (32 hex chars)
@@ -74,6 +77,7 @@ class ServerProfile {
     bool? useCloudflareTunnel,
     String? cloudflareClientId,
     String? cloudflareClientSecret,
+    List<CustomCommand>? customCommands,
   }) {
     return ServerProfile(
       id: id ?? this.id,
@@ -88,6 +92,7 @@ class ServerProfile {
       useCloudflareTunnel: useCloudflareTunnel ?? this.useCloudflareTunnel,
       cloudflareClientId: cloudflareClientId ?? this.cloudflareClientId,
       cloudflareClientSecret: cloudflareClientSecret ?? this.cloudflareClientSecret,
+      customCommands: customCommands ?? this.customCommands,
     );
   }
 
@@ -106,6 +111,7 @@ class ServerProfile {
       // [M4] cloudflareClientId is now treated as sensitive — stripped unless includeSecrets
       'cloudflareClientId': includeSecrets ? cloudflareClientId : '',
       'cloudflareClientSecret': includeSecrets ? cloudflareClientSecret : '',
+      'customCommands': customCommands.map((c) => c.toJson()).toList(),
     };
   }
 
@@ -123,6 +129,13 @@ class ServerProfile {
       }
     }
 
+    List<CustomCommand> parsedCustomCommands = [];
+    if (json['customCommands'] != null && json['customCommands'] is List) {
+      parsedCustomCommands = (json['customCommands'] as List)
+          .map((item) => CustomCommand.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+
     return ServerProfile(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Unnamed Server',
@@ -136,6 +149,7 @@ class ServerProfile {
       useCloudflareTunnel: json['useCloudflareTunnel'] == true,
       cloudflareClientId: json['cloudflareClientId']?.toString() ?? '',
       cloudflareClientSecret: json['cloudflareClientSecret']?.toString() ?? '',
+      customCommands: parsedCustomCommands,
     );
   }
 }

@@ -32,7 +32,7 @@ class ResourceMonitorTab extends StatelessWidget {
       onRefresh: () async => await provider.refreshData(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 700;
+          final isWide = constraints.maxWidth >= 700 && MediaQuery.of(context).orientation == Orientation.landscape;
 
           // --- Shared widgets ---
           final serverHeader = GlassCard(
@@ -235,8 +235,10 @@ class ResourceMonitorTab extends StatelessWidget {
           );
 
           // --- Network + Temp row ---
-          Widget networkTempRow = Row(
-            children: [
+          Widget networkTempRow = IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               Expanded(
                 child: GlassCard(
                   padding: const EdgeInsets.all(14),
@@ -304,6 +306,7 @@ class ResourceMonitorTab extends StatelessWidget {
                 ),
               ),
             ],
+          ),
           );
 
           // --- Storage disks ---

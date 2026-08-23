@@ -57,7 +57,7 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 700;
+        final isWide = constraints.maxWidth >= 700 && MediaQuery.of(context).orientation == Orientation.landscape;
 
         Widget body = RefreshIndicator(
           color: AppTheme.neonCyan,

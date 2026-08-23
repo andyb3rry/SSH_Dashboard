@@ -6,6 +6,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/disconnected_server_view.dart';
 import '../../utils/command_validator.dart';
+import '../../models/custom_command.dart';
+import '../../widgets/custom_command_dialog.dart';
 import 'cron_manager_section.dart';
 
 class PowerControlTab extends StatefulWidget {
@@ -396,6 +398,68 @@ class _PowerControlTabState extends State<PowerControlTab> {
     });
   }
 
+  void _openCustomCommandDialog({CustomCommand? command}) async {
+    final result = await showDialog<CustomCommand>(
+      context: context,
+      builder: (_) => CustomCommandDialog(existingCommand: command),
+    );
+
+    if (result != null) {
+      final provider = Provider.of<ServerProvider>(context, listen: false);
+      if (provider.activeProfile != null) {
+        final profile = provider.getFullProfile(provider.activeProfile!.id);
+        if (profile == null) return;
+        List<CustomCommand> updatedCommands = List.from(profile.customCommands);
+        
+        final existingIndex = updatedCommands.indexWhere((c) => c.id == result.id);
+        if (existingIndex >= 0) {
+          updatedCommands[existingIndex] = result;
+        } else {
+          updatedCommands.add(result);
+        }
+        
+        final updatedProfile = profile.copyWith(customCommands: updatedCommands);
+        await provider.saveProfile(updatedProfile);
+        setState(() {}); // Re-build UI to show new commands
+      }
+    }
+  }
+
+  void _deleteCustomCommand(CustomCommand command) async {
+    final provider = Provider.of<ServerProvider>(context, listen: false);
+    if (provider.activeProfile != null) {
+      final profile = provider.getFullProfile(provider.activeProfile!.id);
+      if (profile == null) return;
+      List<CustomCommand> updatedCommands = List.from(profile.customCommands);
+      updatedCommands.removeWhere((c) => c.id == command.id);
+      
+      final updatedProfile = profile.copyWith(customCommands: updatedCommands);
+      await provider.saveProfile(updatedProfile);
+      setState(() {});
+    }
+  }
+
+  void _executeCustomCommand(CustomCommand command) async {
+    final provider = Provider.of<ServerProvider>(context, listen: false);
+    setState(() {
+      _updateLogs += '\n[${DateTime.now().toIso8601String().substring(11, 19)}] Executing: ${command.title}\n> ${command.command}\n';
+    });
+    _scrollUpdateLogsToBottom();
+    try {
+      final result = await provider.executeCommand(command.command);
+      setState(() {
+        _updateLogs += result.trim();
+        _updateLogs += '\n';
+      });
+      _scrollUpdateLogsToBottom();
+    } catch (e) {
+      setState(() {
+        _updateLogs += 'Error: $e\n';
+      });
+      _scrollUpdateLogsToBottom();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ServerProvider>(context);
@@ -412,7 +476,7 @@ class _PowerControlTabState extends State<PowerControlTab> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 700;
+        final isWide = constraints.maxWidth >= 700 && MediaQuery.of(context).orientation == Orientation.landscape;
 
         // --- Power buttons ---
         Widget powerSection = Column(
@@ -487,13 +551,24 @@ class _PowerControlTabState extends State<PowerControlTab> {
           ],
         );
 
-        // --- Package Maintenance ---
-        Widget updateSection = Column(
+        // --- Custom Commands ---
+        final customCommands = provider.activeProfile?.customCommands ?? [];
+        Widget customCommandsSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Package Maintenance & System Update',
-              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Custom Commands',
+                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                TextButton.icon(
+                  onPressed: () => _openCustomCommandDialog(),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add'),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             GlassCard(
@@ -548,6 +623,92 @@ class _PowerControlTabState extends State<PowerControlTab> {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+            if (customCommands.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Center(
+                  child: Text(
+                    'No custom commands configured.',
+                    style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 180,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.3,
+                ),
+                itemCount: customCommands.length,
+                itemBuilder: (ctx, i) {
+                  final cmd = customCommands[i];
+                  IconData iconData = Icons.terminal;
+                  switch (cmd.iconName) {
+                    case 'storage': iconData = Icons.storage; break;
+                    case 'save': iconData = Icons.save; break;
+                    case 'wifi': iconData = Icons.wifi; break;
+                    case 'network_check': iconData = Icons.network_check; break;
+                    case 'memory': iconData = Icons.memory; break;
+                    case 'build': iconData = Icons.build; break;
+                    case 'play_arrow': iconData = Icons.play_arrow; break;
+                    case 'bolt': iconData = Icons.bolt; break;
+                    case 'web': iconData = Icons.language; break;
+                  }
+                  
+                  return GlassCard(
+                    onTap: () => _executeCustomCommand(cmd),
+                    borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(iconData, color: AppTheme.neonCyan, size: 28),
+                              const SizedBox(height: 8),
+                              Text(
+                                cmd.title,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          top: -8,
+                          right: -8,
+                          child: PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, size: 16, color: Colors.white54),
+                            color: AppTheme.surfaceDark,
+                            onSelected: (val) {
+                              if (val == 'edit') {
+                                _openCustomCommandDialog(command: cmd);
+                              } else if (val == 'delete') {
+                                _deleteCustomCommand(cmd);
+                              }
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(color: Colors.white))),
+                              const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppTheme.crimson))),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
           ],
         );
 
@@ -565,32 +726,34 @@ class _PowerControlTabState extends State<PowerControlTab> {
                         children: [
                           powerSection,
                           const SizedBox(height: 24),
-                          updateSection,
-                          if (_updateLogs.isNotEmpty) ...[
-                            const SizedBox(height: 18),
-                            Text(
-                              'Update Terminal Output',
-                              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          customCommandsSection,
+                          const SizedBox(height: 18),
+                          Text(
+                            'Terminal Output',
+                            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            height: 220,
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppTheme.cardBorder),
                             ),
-                            const SizedBox(height: 8),
-                            Container(
-                              height: 220,
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: AppTheme.cardBorder),
-                              ),
-                              child: SingleChildScrollView(
-                                controller: _updateLogsScrollController,
-                                child: SelectableText(
-                                  _updateLogs,
-                                  style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),
+                            child: SingleChildScrollView(
+                              controller: _updateLogsScrollController,
+                              child: SelectableText(
+                                _updateLogs.isEmpty ? 'Awaiting command execution...' : _updateLogs,
+                                style: GoogleFonts.jetBrainsMono(
+                                  color: _updateLogs.isEmpty ? Colors.white30 : AppTheme.emerald, 
+                                  fontSize: 12, 
+                                  height: 1.4,
                                 ),
                               ),
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ),
@@ -607,33 +770,36 @@ class _PowerControlTabState extends State<PowerControlTab> {
                   children: [
                     powerSection,
                     const SizedBox(height: 24),
-                    updateSection,
+                    customCommandsSection,
                     const SizedBox(height: 18),
-                    if (_updateLogs.isNotEmpty) ...[
-                      Text(
-                        'Update Terminal Output',
-                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Terminal Output',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 220,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppTheme.cardBorder),
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 220,
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppTheme.cardBorder),
-                        ),
-                        child: SingleChildScrollView(
-                          controller: _updateLogsScrollController,
-                          child: SelectableText(
-                            _updateLogs,
-                            style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),
+                      child: SingleChildScrollView(
+                        controller: _updateLogsScrollController,
+                        child: SelectableText(
+                          _updateLogs.isEmpty ? 'Awaiting command execution...' : _updateLogs,
+                          style: GoogleFonts.jetBrainsMono(
+                            color: _updateLogs.isEmpty ? Colors.white30 : AppTheme.emerald, 
+                            fontSize: 12, 
+                            height: 1.4,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
-                    ],
+                    ),
+                    const SizedBox(height: 24),
                     const CronManagerSection(),
                   ],
                 ),

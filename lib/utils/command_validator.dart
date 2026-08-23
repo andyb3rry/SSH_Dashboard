@@ -354,4 +354,52 @@ class CommandValidator {
       severity: ValidationSeverity.safe,
     );
   }
+
+  /// Validates custom commands to block any root privilege escalation or system-wide changes.
+  static ValidationResult validateCustomCommand(String command) {
+    final cleanCmd = command.trim();
+    if (cleanCmd.isEmpty) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Command cannot be empty.',
+      );
+    }
+
+    final cleanCmdLower = cleanCmd.toLowerCase();
+    
+    // Explicit blacklist of root tools and package managers
+    final List<String> blacklist = [
+      'sudo ', 'su ', 'doas ', 
+      'apt ', 'apt-get ', 'dpkg ', 'snap ', 'flatpak ',
+      'yum ', 'dnf ', 'rpm ', 'pacman ', 'zypper ', 'apk ',
+      'chmod ', 'chown ', 'chgrp ',
+      'rm -rf /', 'rm -r /',
+      'passwd ',
+    ];
+
+    for (final pattern in blacklist) {
+      if (cleanCmdLower.contains(pattern) || cleanCmdLower.startsWith(pattern.trim())) {
+        return ValidationResult(
+          isSafe: false,
+          severity: ValidationSeverity.blocked,
+          message: 'Blocked: Custom commands cannot contain root operations or package managers ($pattern).',
+        );
+      }
+    }
+
+    // Check for modifications to sensitive system directories
+    if (RegExp(r'(^|\s|\||&&|;)(>|>>)\s*/(etc|bin|sbin|usr|lib|boot|dev|sys|proc)/').hasMatch(cleanCmdLower)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Modifying sensitive system directories is forbidden.',
+      );
+    }
+
+    return const ValidationResult(
+      isSafe: true,
+      severity: ValidationSeverity.safe,
+    );
+  }
 }
