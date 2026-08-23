@@ -55,243 +55,265 @@ class _DockerManagerTabState extends State<DockerManagerTab> {
 
     final runningCount = allContainers.where((c) => c.isRunning).length;
 
-    return RefreshIndicator(
-      color: AppTheme.neonCyan,
-      backgroundColor: AppTheme.surfaceDark,
-      onRefresh: () async => await provider.refreshData(),
-      child: Column(
-        children: [
-          // Header e barra di ricerca
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 700;
+
+        Widget body = RefreshIndicator(
+          color: AppTheme.neonCyan,
+          backgroundColor: AppTheme.surfaceDark,
+          onRefresh: () async => await provider.refreshData(),
+          child: Column(
+            children: [
+              // Header e barra di ricerca
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Icon(Icons.apps, color: AppTheme.neonCyan),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Docker Containers',
-                          style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                        Row(
+                          children: [
+                            const Icon(Icons.apps, color: AppTheme.neonCyan),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Docker Containers',
+                              style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                        Chip(
+                          backgroundColor: AppTheme.surfaceDark,
+                          side: const BorderSide(color: AppTheme.cardBorder),
+                          label: Text(
+                            'Running: $runningCount / ${allContainers.length}',
+                            style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     ),
-                    Chip(
-                      backgroundColor: AppTheme.surfaceDark,
-                      side: const BorderSide(color: AppTheme.cardBorder),
-                      label: Text(
-                        'Running: $runningCount / ${allContainers.length}',
-                        style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.w600),
+                    const SizedBox(height: 12),
+                    TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: InputDecoration(
+                        hintText: 'Search by name, image or ID...',
+                        prefixIcon: const Icon(Icons.search, color: Colors.white60),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.white60),
+                                onPressed: () => setState(() => _searchQuery = ''),
+                              )
+                            : null,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, image or ID...',
-                    prefixIcon: const Icon(Icons.search, color: Colors.white60),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.white60),
-                            onPressed: () => setState(() => _searchQuery = ''),
-                          )
-                        : null,
+              ),
+
+              if (provider.isLoadingAction)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: LinearProgressIndicator(color: AppTheme.neonCyan, backgroundColor: AppTheme.obsidian),
+                ),
+
+              Expanded(
+                child: filteredContainers.isEmpty
+                    ? Center(
+                        child: Text(
+                          allContainers.isEmpty ? 'No Docker Containers Found' : 'No container matches the search',
+                          style: GoogleFonts.outfit(color: Colors.white60, fontSize: 16),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 144),
+                        itemCount: filteredContainers.length,
+                        itemBuilder: (ctx, idx) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: _buildContainerCard(context, filteredContainers[idx]),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+
+        if (isWide) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: body,
+            ),
+          );
+        }
+
+        return body;
+      },
+    );
+  }
+
+  Widget _buildContainerCard(BuildContext context, DockerContainer container) {
+    final provider = Provider.of<ServerProvider>(context, listen: false);
+    final isRunning = container.isRunning;
+    final isPaused = container.isPaused;
+
+    final statusColor = isRunning
+        ? AppTheme.emerald
+        : (isPaused ? AppTheme.amber : AppTheme.crimson);
+
+    return GlassCard(
+      borderColor: isRunning ? AppTheme.emerald.withValues(alpha: 0.5) : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: statusColor.withValues(alpha: 0.6), blurRadius: 8),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        container.name,
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  container.state.toUpperCase(),
+                  style: GoogleFonts.outfit(
+                    color: statusColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.layers_outlined, size: 16, color: Colors.white60),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  container.image,
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          if (container.ports.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.lan_outlined, size: 16, color: AppTheme.neonCyan),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    container.ports,
+                    style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontSize: 12),
                   ),
                 ),
               ],
             ),
-          ),
-
-          if (provider.isLoadingAction)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: LinearProgressIndicator(color: AppTheme.neonCyan, backgroundColor: AppTheme.obsidian),
-            ),
-
-          Expanded(
-            child: filteredContainers.isEmpty
-                ? Center(
-                    child: Text(
-                      allContainers.isEmpty ? 'No Docker Containers Found' : 'No container matches the search',
-                      style: GoogleFonts.outfit(color: Colors.white60, fontSize: 16),
+          ],
+          const SizedBox(height: 14),
+          const Divider(color: AppTheme.cardBorder, height: 1),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: () => _showLogsSheet(context, container),
+                icon: const Icon(Icons.text_snippet_outlined, size: 18, color: AppTheme.neonCyan),
+                label: Text('Logs', style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+              ),
+              Row(
+                children: [
+                  if (isRunning) ...[
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: AppTheme.amber),
+                      tooltip: 'Restart Container',
+                      onPressed: () async {
+                        final error = await provider.restartContainer(container.id);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
+                          content: Text(error ?? '✓ ${container.name} restarted'),
+                        ));
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 144),
-                    itemCount: filteredContainers.length,
-                    itemBuilder: (ctx, idx) {
-                      final container = filteredContainers[idx];
-                      final isRunning = container.isRunning;
-                      final isPaused = container.isPaused;
-
-                      final statusColor = isRunning
-                          ? AppTheme.emerald
-                          : (isPaused ? AppTheme.amber : AppTheme.crimson);
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: GlassCard(
-                          borderColor: isRunning ? AppTheme.emerald.withValues(alpha: 0.5) : null,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 12,
-                                          height: 12,
-                                          decoration: BoxDecoration(
-                                            color: statusColor,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(color: statusColor.withValues(alpha: 0.6), blurRadius: 8),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            container.name,
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: statusColor.withValues(alpha: 0.5)),
-                                    ),
-                                    child: Text(
-                                      container.state.toUpperCase(),
-                                      style: GoogleFonts.outfit(
-                                        color: statusColor,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(Icons.layers_outlined, size: 16, color: Colors.white60),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      container.image,
-                                      style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (container.ports.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.lan_outlined, size: 16, color: AppTheme.neonCyan),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        container.ports,
-                                        style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontSize: 12),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              const SizedBox(height: 14),
-                              const Divider(color: AppTheme.cardBorder, height: 1),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  TextButton.icon(
-                                    onPressed: () => _showLogsSheet(context, container),
-                                    icon: const Icon(Icons.text_snippet_outlined, size: 18, color: AppTheme.neonCyan),
-                                    label: Text('Logs', style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (isRunning) ...[
-                                        IconButton(
-                                          icon: const Icon(Icons.refresh, color: AppTheme.amber),
-                                          tooltip: 'Restart Container',
-                                          onPressed: () async {
-                                            final error = await provider.restartContainer(container.id);
-                                            if (!context.mounted) return;
-                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                              backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
-                                              content: Text(error ?? '✓ ${container.name} restarted'),
-                                            ));
-                                          },
-                                        ),
-                                        const SizedBox(width: 6),
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppTheme.crimson.withValues(alpha: 0.2),
-                                            foregroundColor: AppTheme.crimson,
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                            side: const BorderSide(color: AppTheme.crimson),
-                                          ),
-                                          onPressed: () async {
-                                            final error = await provider.stopContainer(container.id);
-                                            if (!context.mounted) return;
-                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                              backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
-                                              content: Text(error ?? '✓ ${container.name} stopped'),
-                                            ));
-                                          },
-                                          icon: const Icon(Icons.stop, size: 16),
-                                          label: const Text('Stop'),
-                                        ),
-                                      ] else ...[
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppTheme.emerald.withValues(alpha: 0.2),
-                                            foregroundColor: AppTheme.emerald,
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                            side: const BorderSide(color: AppTheme.emerald),
-                                          ),
-                                          onPressed: () async {
-                                            final error = await provider.startContainer(container.id);
-                                            if (!context.mounted) return;
-                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                              backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
-                                              content: Text(error ?? '✓ ${container.name} started'),
-                                            ));
-                                          },
-                                          icon: const Icon(Icons.play_arrow, size: 16),
-                                          label: const Text('Start'),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                    const SizedBox(width: 6),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.crimson.withValues(alpha: 0.2),
+                        foregroundColor: AppTheme.crimson,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        side: const BorderSide(color: AppTheme.crimson),
+                      ),
+                      onPressed: () async {
+                        final error = await provider.stopContainer(container.id);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
+                          content: Text(error ?? '✓ ${container.name} stopped'),
+                        ));
+                      },
+                      icon: const Icon(Icons.stop, size: 16),
+                      label: const Text('Stop'),
+                    ),
+                  ] else ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.emerald.withValues(alpha: 0.2),
+                        foregroundColor: AppTheme.emerald,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        side: const BorderSide(color: AppTheme.emerald),
+                      ),
+                      onPressed: () async {
+                        final error = await provider.startContainer(container.id);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          backgroundColor: error != null ? AppTheme.crimson : AppTheme.emerald,
+                          content: Text(error ?? '✓ ${container.name} started'),
+                        ));
+                      },
+                      icon: const Icon(Icons.play_arrow, size: 16),
+                      label: const Text('Start'),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
         ],
       ),

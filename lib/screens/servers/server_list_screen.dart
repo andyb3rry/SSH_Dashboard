@@ -187,229 +187,248 @@ class _ServerListScreenState extends State<ServerListScreen> {
           label: Text('Add Server', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         ),
       ),
-      body: Column(
-        children: [
-          if (!widget.isModalSelection)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'CONFIGURED SERVERS (${provider.profiles.length})',
-                  style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                ),
-              ),
-            ),
-          Expanded(
-            child: provider.profiles.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceDark.withValues(alpha: 0.6),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.cardBorder, width: 2),
-                      ),
-                      child: const Icon(Icons.terminal, size: 64, color: AppTheme.neonCyan),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'No Server Configured',
-                      style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Add your remote Linux/Android server to start monitoring resources, Docker, and control the shell via SSH.',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(color: Colors.white60, fontSize: 15),
-                    ),
-                    const SizedBox(height: 28),
-                    ElevatedButton.icon(
-                      onPressed: () => _openForm(context),
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Configure First Server'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : ListView.builder(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: widget.isModalSelection ? 16 : 144),
-              itemCount: provider.profiles.length,
-              itemBuilder: (ctx, idx) {
-                final profile = provider.profiles[idx];
-                final isActive = provider.activeProfile?.id == profile.id;
-                final isConnected = isActive && provider.status == ConnectionStatus.connected;
-                final isConnecting = isActive && provider.status == ConnectionStatus.connecting;
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 700;
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: GlassCard(
-                    isGlow: isConnected || isConnecting,
-                    borderColor: isConnected ? AppTheme.emerald : (isConnecting ? AppTheme.amber : null),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: isConnected
-                                          ? AppTheme.emerald.withValues(alpha: 0.15)
-                                          : AppTheme.obsidian,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isConnected ? AppTheme.emerald : AppTheme.cardBorder,
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      Icons.storage,
-                                      color: isConnected ? AppTheme.emerald : AppTheme.neonCyan,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          profile.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                        Text(
-                                          '${profile.username}@${profile.host}:${profile.port}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.outfit(
-                                            color: Colors.white60,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert, color: Colors.white70),
-                              color: AppTheme.surfaceDark,
-                              onSelected: (val) {
-                                if (val == 'edit') {
-                                  final fullProfile = provider.getFullProfile(profile.id);
-                                  if (fullProfile != null) {
-                                    _openForm(context, fullProfile);
-                                  }
-                                }
-                                if (val == 'delete') _confirmDelete(context, profile);
-                              },
-                              itemBuilder: (_) => [
-                                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppTheme.crimson))),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        if (isActive && provider.errorMessage.isNotEmpty)
+          Widget content = Column(
+            children: [
+              if (!widget.isModalSelection)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'CONFIGURED SERVERS (${provider.profiles.length})',
+                      style: GoogleFonts.outfit(color: AppTheme.neonCyan, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: provider.profiles.isEmpty
+              ? Center(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                           Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: AppTheme.crimson.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppTheme.crimson.withValues(alpha: 0.5)),
+                              color: AppTheme.surfaceDark.withValues(alpha: 0.6),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppTheme.cardBorder, width: 2),
                             ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.error_outline, color: AppTheme.crimson, size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    provider.errorMessage,
-                                    style: GoogleFonts.outfit(color: AppTheme.crimson, fontSize: 13),
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: const Icon(Icons.terminal, size: 64, color: AppTheme.neonCyan),
                           ),
-                        Row(
+                          const SizedBox(height: 24),
+                          Text(
+                            'No Server Configured',
+                            style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Add your remote Linux/Android server to start monitoring resources, Docker, and control the shell via SSH.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.outfit(color: Colors.white60, fontSize: 15),
+                          ),
+                          const SizedBox(height: 28),
+                          ElevatedButton.icon(
+                            onPressed: () => _openForm(context),
+                            icon: const Icon(Icons.add_circle_outline),
+                            label: const Text('Configure First Server'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: widget.isModalSelection ? 16 : 144),
+                  itemCount: provider.profiles.length,
+                  itemBuilder: (ctx, idx) {
+                    final profile = provider.profiles[idx];
+                    final isActive = provider.activeProfile?.id == profile.id;
+                    final isConnected = isActive && provider.status == ConnectionStatus.connected;
+                    final isConnecting = isActive && provider.status == ConnectionStatus.connecting;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: GlassCard(
+                        isGlow: isConnected || isConnecting,
+                        borderColor: isConnected ? AppTheme.emerald : (isConnecting ? AppTheme.amber : null),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (isConnected)
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.crimson.withValues(alpha: 0.2),
-                                    foregroundColor: AppTheme.crimson,
-                                    elevation: 0,
-                                    side: const BorderSide(color: AppTheme.crimson),
-                                  ),
-                                  onPressed: () => provider.disconnect(),
-                                  icon: const Icon(Icons.power_settings_new, size: 18),
-                                  label: const Text('Disconnect'),
-                                ),
-                              )
-                            else if (isConnecting)
-                              Expanded(
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.amber),
-                                  onPressed: null,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isConnected
+                                              ? AppTheme.emerald.withValues(alpha: 0.15)
+                                              : AppTheme.obsidian,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isConnected ? AppTheme.emerald : AppTheme.cardBorder,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.storage,
+                                          color: isConnected ? AppTheme.emerald : AppTheme.neonCyan,
+                                        ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      Text('Connecting...', style: GoogleFonts.outfit(color: Colors.black)),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              profile.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${profile.username}@${profile.host}:${profile.port}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.outfit(
+                                                color: Colors.white60,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                              )
-                            else
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () async {
-                                    final fullProfile = provider.getFullProfile(profile.id);
-                                    if (fullProfile != null) {
-                                      await provider.connect(fullProfile);
-                                      if (context.mounted && widget.isModalSelection && provider.status == ConnectionStatus.connected) {
-                                        Navigator.pop(context);
+                                PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert, color: Colors.white70),
+                                  color: AppTheme.surfaceDark,
+                                  onSelected: (val) {
+                                    if (val == 'edit') {
+                                      final fullProfile = provider.getFullProfile(profile.id);
+                                      if (fullProfile != null) {
+                                        _openForm(context, fullProfile);
                                       }
                                     }
+                                    if (val == 'delete') _confirmDelete(context, profile);
                                   },
-                                  icon: const Icon(Icons.bolt, size: 20),
-                                  label: const Text('Connect Server via SSH'),
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                    const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppTheme.crimson))),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            if (isActive && provider.errorMessage.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.crimson.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppTheme.crimson.withValues(alpha: 0.5)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, color: AppTheme.crimson, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        provider.errorMessage,
+                                        style: GoogleFonts.outfit(color: AppTheme.crimson, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                            Row(
+                              children: [
+                                if (isConnected)
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.crimson.withValues(alpha: 0.2),
+                                        foregroundColor: AppTheme.crimson,
+                                        elevation: 0,
+                                        side: const BorderSide(color: AppTheme.crimson),
+                                      ),
+                                      onPressed: () => provider.disconnect(),
+                                      icon: const Icon(Icons.power_settings_new, size: 18),
+                                      label: const Text('Disconnect'),
+                                    ),
+                                  )
+                                else if (isConnecting)
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.amber),
+                                      onPressed: null,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const SizedBox(
+                                            height: 18,
+                                            width: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Text('Connecting...', style: GoogleFonts.outfit(color: Colors.black)),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () async {
+                                        final fullProfile = provider.getFullProfile(profile.id);
+                                        if (fullProfile != null) {
+                                          await provider.connect(fullProfile);
+                                          if (context.mounted && widget.isModalSelection && provider.status == ConnectionStatus.connected) {
+                                            Navigator.pop(context);
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(Icons.bolt, size: 20),
+                                      label: const Text('Connect Server via SSH'),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+
+          if (isWide) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: content,
+              ),
+            );
+          }
+
+          return content;
+        },
       ),
     );
   }

@@ -410,169 +410,235 @@ class _PowerControlTabState extends State<PowerControlTab> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 144),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Power Actions Section
-          Text(
-            'Power Control (Power & Reboot)',
-            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: GlassCard(
-                  onTap: () => _confirmPowerAction(context, isReboot: true),
-                  borderColor: AppTheme.amber.withValues(alpha: 0.6),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppTheme.amber.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.restart_alt, color: AppTheme.amber, size: 32),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Reboot Server',
-                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'sudo reboot',
-                        style: GoogleFonts.jetBrainsMono(color: Colors.white60, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: GlassCard(
-                  onTap: () => _confirmPowerAction(context, isReboot: false),
-                  borderColor: AppTheme.crimson.withValues(alpha: 0.6),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppTheme.crimson.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.power_settings_new, color: AppTheme.crimson, size: 32),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Shutdown Server',
-                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'sudo poweroff',
-                        style: GoogleFonts.jetBrainsMono(color: Colors.white60, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 700;
 
-          // Package Maintenance and System Update
-          Text(
-            'Package Maintenance & System Update',
-            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          GlassCard(
-            borderColor: AppTheme.emerald.withValues(alpha: 0.4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        // --- Power buttons ---
+        Widget powerSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Power Control',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            Row(
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.system_update, color: AppTheme.emerald),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Update',
-                      style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                Expanded(
+                  child: GlassCard(
+                    onTap: () => _confirmPowerAction(context, isReboot: true),
+                    borderColor: AppTheme.amber.withValues(alpha: 0.6),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppTheme.amber.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.restart_alt, color: AppTheme.amber, size: 32),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Reboot Server',
+                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'sudo reboot',
+                          style: GoogleFonts.jetBrainsMono(color: Colors.white60, fontSize: 11),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Configured command for this profile:',
-                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.obsidian,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.cardBorder),
-                  ),
-                  child: Text(
-                    provider.activeProfile?.customUpdateCommand ?? 'sudo apt update && sudo apt upgrade -y',
-                    style: GoogleFonts.jetBrainsMono(color: AppTheme.neonCyan, fontSize: 12),
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.emerald,
-                      foregroundColor: AppTheme.obsidian,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: GlassCard(
+                    onTap: () => _confirmPowerAction(context, isReboot: false),
+                    borderColor: AppTheme.crimson.withValues(alpha: 0.6),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppTheme.crimson.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.power_settings_new, color: AppTheme.crimson, size: 32),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Shutdown Server',
+                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'sudo poweroff',
+                          style: GoogleFonts.jetBrainsMono(color: Colors.white60, fontSize: 11),
+                        ),
+                      ],
                     ),
-                    onPressed: _isUpdating ? null : () => _runSystemUpdate(context),
-                    icon: _isUpdating
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                        : const Icon(Icons.rocket_launch),
-                    label: Text(_isUpdating ? 'Updating...' : 'Start Update'),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 18),
-
-          // Console Output
-          if (_updateLogs.isNotEmpty) ...[
-            Text(
-              'Update Terminal Output',
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 220,
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.cardBorder),
-              ),
-              child: SingleChildScrollView(
-                controller: _updateLogsScrollController,
-                child: SelectableText(
-                  _updateLogs,
-                  style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
           ],
-          const CronManagerSection(),
-        ],
-      ),
+        );
+
+        // --- Package Maintenance ---
+        Widget updateSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Package Maintenance & System Update',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            GlassCard(
+              borderColor: AppTheme.emerald.withValues(alpha: 0.4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.system_update, color: AppTheme.emerald),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Update',
+                        style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Configured command for this profile:',
+                    style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.obsidian,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.cardBorder),
+                    ),
+                    child: Text(
+                      provider.activeProfile?.customUpdateCommand ?? 'sudo apt update && sudo apt upgrade -y',
+                      style: GoogleFonts.jetBrainsMono(color: AppTheme.neonCyan, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.emerald,
+                        foregroundColor: AppTheme.obsidian,
+                      ),
+                      onPressed: _isUpdating ? null : () => _runSystemUpdate(context),
+                      icon: _isUpdating
+                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                          : const Icon(Icons.rocket_launch),
+                      label: Text(_isUpdating ? 'Updating...' : 'Start Update'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 144),
+          child: isWide
+              // ====== WIDE (tablet): two-column layout ======
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left column: Power + Update + terminal output
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          powerSection,
+                          const SizedBox(height: 24),
+                          updateSection,
+                          if (_updateLogs.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Text(
+                              'Update Terminal Output',
+                              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              height: 220,
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppTheme.cardBorder),
+                              ),
+                              child: SingleChildScrollView(
+                                controller: _updateLogsScrollController,
+                                child: SelectableText(
+                                  _updateLogs,
+                                  style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    // Right column: Cron Manager
+                    const Expanded(
+                      child: CronManagerSection(),
+                    ),
+                  ],
+                )
+              // ====== NARROW (phone): stacked ======
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    powerSection,
+                    const SizedBox(height: 24),
+                    updateSection,
+                    const SizedBox(height: 18),
+                    if (_updateLogs.isNotEmpty) ...[
+                      Text(
+                        'Update Terminal Output',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 220,
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.cardBorder),
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _updateLogsScrollController,
+                          child: SelectableText(
+                            _updateLogs,
+                            style: GoogleFonts.jetBrainsMono(color: AppTheme.emerald, fontSize: 12, height: 1.4),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    const CronManagerSection(),
+                  ],
+                ),
+        );
+      },
     );
   }
 }

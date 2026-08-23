@@ -643,51 +643,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       ),
       body: Stack(
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isLargeScreen = constraints.maxWidth >= 800;
-              return Row(
-                children: [
-                  if (isLargeScreen)
-                    const SizedBox(
-                      width: 350,
-                      child: ServerListScreen(),
-                    ),
-                  if (isLargeScreen)
-                    Container(width: 1, color: AppTheme.cardBorder),
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      physics: const BouncingScrollPhysics(),
-                      allowImplicitScrolling: true,
-                      onPageChanged: (idx) => setState(() => _currentIndex = idx),
-                      children: isLargeScreen
-                          ? [
-                              const _KeepAlivePage(child: ResourceMonitorTab()),
-                              const _KeepAlivePage(child: DockerManagerTab()),
-                              const _KeepAlivePage(child: PowerControlTab()),
-                              _KeepAlivePage(
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.arrow_back, size: 48, color: AppTheme.neonCyan),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'Select a server from the left panel',
-                                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 18),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ]
-                          : _tabs,
-                    ),
-                  ),
-                ],
-              );
-            },
+          PageView(
+            controller: _pageController,
+            physics: const BouncingScrollPhysics(),
+            allowImplicitScrolling: true,
+            onPageChanged: (idx) => setState(() => _currentIndex = idx),
+            children: _tabs,
           ),
           Positioned(
             left: 0,
