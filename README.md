@@ -39,6 +39,7 @@
 - **🕘 Cron Job Management**: Add, edit, delete (user only), run and check the last execution of the cron jobs on your server.
 - **🖥️ Terminal**: Built-in full VT100/Xterm compatible SSH terminal using `dartssh2`, supporting interactive commands, sudo, and custom scripts.
 - **⚡ Power Management**: Instant one-click triggers for system `Reboot`, `Shutdown`, system updates (`apt/dnf update & upgrade`), and local/remote commands.
+- **🧩 Custom Commands**: Create, organize and execute your own saved commands on the server with a single tap. Supports categorization and input sanitization for safe execution.
 - **🔐 Cloudflare Zero Trust Native Integration**: Seamlessly connect to servers hidden behind Cloudflare Tunnels over WebSockets. Uses non-expiring **Service Tokens**.
 - **🛡️ Enterprise Secure Storage**: Passwords, SSH private keys, and Cloudflare Client Secrets are stored natively in Android's KeyStore.
 
