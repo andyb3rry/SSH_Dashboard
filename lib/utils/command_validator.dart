@@ -356,6 +356,7 @@ class CommandValidator {
   }
 
   /// Validates custom commands to block any root privilege escalation or system-wide changes.
+  /// Uses a defense-in-depth approach: control chars → shell operators → encoding tricks → blacklist → system paths.
   static ValidationResult validateCustomCommand(String command) {
     final cleanCmd = command.trim();
     if (cleanCmd.isEmpty) {
@@ -366,34 +367,158 @@ class CommandValidator {
       );
     }
 
-    final cleanCmdLower = cleanCmd.toLowerCase();
-    
-    // Explicit blacklist of root tools and package managers
-    final List<String> blacklist = [
-      'sudo ', 'su ', 'doas ', 
-      'apt ', 'apt-get ', 'dpkg ', 'snap ', 'flatpak ',
-      'yum ', 'dnf ', 'rpm ', 'pacman ', 'zypper ', 'apk ',
-      'chmod ', 'chown ', 'chgrp ',
-      'rm -rf /', 'rm -r /',
-      'passwd ',
-    ];
+    // --- [S1] Length limit ---
+    if (cleanCmd.length > 512) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Command exceeds maximum allowed length (512 characters).',
+      );
+    }
 
-    for (final pattern in blacklist) {
-      if (cleanCmdLower.contains(pattern) || cleanCmdLower.startsWith(pattern.trim())) {
+    // --- [S2] Block control characters: newlines, carriage returns, null bytes ---
+    if (cleanCmd.contains('\n') || cleanCmd.contains('\r') || cleanCmd.contains('\x00')) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Newlines, carriage returns, and null bytes are forbidden.',
+      );
+    }
+
+    // --- [S3] Block shell operators: command substitution, heredoc, process substitution ---
+    if (cleanCmd.contains('`') || RegExp(r'\$\(').hasMatch(cleanCmd)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Command substitution (backtick or \$()) is forbidden in custom commands.',
+      );
+    }
+    if (cleanCmd.contains('<<') || cleanCmd.contains('<(') || cleanCmd.contains('>(')) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Heredoc (<<) and process substitution (<( / >() are forbidden.',
+      );
+    }
+
+    // --- [S4] Block encoding/escaping bypass tricks ---
+    // Backslash inside command words (e.g. s\udo → sudo in bash)
+    if (RegExp(r'[a-zA-Z]\\[a-zA-Z]').hasMatch(cleanCmd)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Backslash escaping within command words is forbidden.',
+      );
+    }
+    // Empty-quote concatenation (e.g. su""do, su''do)
+    if (RegExp(r'[a-zA-Z]("")|[a-zA-Z](' "''" r')[a-zA-Z]').hasMatch(cleanCmd)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Empty-quote concatenation within command words is forbidden.',
+      );
+    }
+    // $IFS or ${IFS} used as space substitute
+    if (RegExp(r'\$IFS|\$\{IFS\}', caseSensitive: false).hasMatch(cleanCmd)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: r'Blocked: $IFS variable substitution is forbidden.',
+      );
+    }
+
+    final cleanCmdLower = cleanCmd.toLowerCase();
+
+    // --- [S5] Block bash builtins used as bypass wrappers ---
+    final bypassPrefixes = [
+      'command ', 'builtin ',
+      'bash -c', 'bash -i', 'sh -c', 'sh -i', 'zsh -c',
+      '/bin/bash -c', '/bin/sh -c', '/usr/bin/bash -c', '/usr/bin/sh -c',
+      'env ', 'nohup ',
+    ];
+    for (final prefix in bypassPrefixes) {
+      if (cleanCmdLower.startsWith(prefix) || cleanCmdLower.contains(' $prefix') || cleanCmdLower.contains(';$prefix') || cleanCmdLower.contains('|$prefix')) {
         return ValidationResult(
           isSafe: false,
           severity: ValidationSeverity.blocked,
-          message: 'Blocked: Custom commands cannot contain root operations or package managers ($pattern).',
+          message: 'Blocked: Shell wrapper "$prefix" is forbidden in custom commands.',
         );
       }
     }
 
-    // Check for modifications to sensitive system directories
+    // --- [S6] Blacklist of root tools, package managers, and destructive operations ---
+    // Matches both "sudo ..." and standalone "sudo" at end of string
+    final List<String> blacklist = [
+      'sudo', 'su', 'doas', 'pkexec',
+      'apt', 'apt-get', 'dpkg', 'snap', 'flatpak',
+      'yum', 'dnf', 'rpm', 'pacman', 'zypper', 'apk',
+      'chmod', 'chown', 'chgrp',
+      'passwd', 'useradd', 'userdel', 'usermod', 'groupadd',
+      'mount', 'umount', 'mkfs', 'fdisk', 'parted',
+      'iptables', 'nft', 'firewall-cmd', 'ufw',
+      'insmod', 'rmmod', 'modprobe',
+      'dd',
+    ];
+
+    // Split on shell separators to check each segment's leading command
+    final segments = cleanCmdLower.split(RegExp(r'(\s*&&\s*|\s*\|\|\s*|\s*;\s*|\s*\|\s*)'));
+    for (var segment in segments) {
+      final s = segment.trim();
+      if (s.isEmpty) continue;
+
+      final words = s.split(RegExp(r'\s+'));
+      var firstWord = words.first;
+
+      // Strip absolute path to get basename (blocks /usr/bin/sudo etc.)
+      if (firstWord.contains('/')) {
+        firstWord = firstWord.split('/').last;
+      }
+
+      if (blacklist.contains(firstWord)) {
+        return ValidationResult(
+          isSafe: false,
+          severity: ValidationSeverity.blocked,
+          message: 'Blocked: "$firstWord" is a privileged/destructive command and cannot be used in custom commands.',
+        );
+      }
+    }
+
+    // --- [S7] Block dangerous substrings from _forbiddenPatterns (shared with cron) ---
+    for (final pattern in _forbiddenPatterns) {
+      if (cleanCmdLower.contains(pattern.toLowerCase())) {
+        return ValidationResult(
+          isSafe: false,
+          severity: ValidationSeverity.blocked,
+          message: 'Blocked: Dangerous command pattern detected ($pattern).',
+        );
+      }
+    }
+
+    // --- [S8] Block curl/wget piping to shell interpreters ---
+    if (RegExp(r'(curl|wget)\s+[^|]+\|\s*(sudo\s+|env\s+)?(bash|sh|zsh|python|python3|node|perl|ruby|php)').hasMatch(cleanCmdLower)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Downloading and piping to a shell interpreter is forbidden.',
+      );
+    }
+
+    // --- [S9] Block execution from world-writable directories ---
+    if (RegExp(r'(^|\s|;|&&|\|)[\042\047]?/(var/)?tmp/').hasMatch(cleanCmdLower) ||
+        RegExp(r'(^|\s|;|&&|\|)[\042\047]?/dev/shm/').hasMatch(cleanCmdLower)) {
+      return const ValidationResult(
+        isSafe: false,
+        severity: ValidationSeverity.blocked,
+        message: 'Blocked: Executing from world-writable directories (/tmp, /var/tmp, /dev/shm) is forbidden.',
+      );
+    }
+
+    // --- [S10] Block modifications to sensitive system directories ---
     if (RegExp(r'(^|\s|\||&&|;)(>|>>)\s*/(etc|bin|sbin|usr|lib|boot|dev|sys|proc)/').hasMatch(cleanCmdLower)) {
       return const ValidationResult(
         isSafe: false,
         severity: ValidationSeverity.blocked,
-        message: 'Blocked: Modifying sensitive system directories is forbidden.',
+        message: 'Blocked: Redirecting output to sensitive system directories is forbidden.',
       );
     }
 

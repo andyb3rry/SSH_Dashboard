@@ -113,6 +113,7 @@ class _CustomCommandDialogState extends State<CustomCommandDialog> {
               TextField(
                 controller: _titleController,
                 style: const TextStyle(color: Colors.white),
+                maxLength: 40,
                 decoration: InputDecoration(
                   labelText: 'Button Title',
                   labelStyle: const TextStyle(color: Colors.white60),
@@ -132,6 +133,7 @@ class _CustomCommandDialogState extends State<CustomCommandDialog> {
                 controller: _commandController,
                 style: GoogleFonts.jetBrainsMono(color: Colors.white, fontSize: 13),
                 maxLines: 3,
+                maxLength: 512,
                 onChanged: (val) {
                   if (_validationError != null) {
                     setState(() { _validationError = null; });

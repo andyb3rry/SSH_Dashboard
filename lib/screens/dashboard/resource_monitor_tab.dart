@@ -394,7 +394,7 @@ class ResourceMonitorTab extends StatelessWidget {
                 taskManagerButton,
                 const SizedBox(height: 18),
                 Text(
-                  'Used Resources',
+                  'Resources',
                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 12),

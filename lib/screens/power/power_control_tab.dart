@@ -22,6 +22,11 @@ class _PowerControlTabState extends State<PowerControlTab> {
   String _updateLogs = '';
   final ScrollController _updateLogsScrollController = ScrollController();
 
+  /// Tracks custom commands currently being executed (by command ID)
+  final Set<String> _runningCommandIds = {};
+  /// Tracks custom commands that were cancelled mid-execution
+  final Set<String> _cancelledCommandIds = {};
+
   void _scrollUpdateLogsToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_updateLogsScrollController.hasClients) {
@@ -399,6 +404,21 @@ class _PowerControlTabState extends State<PowerControlTab> {
   }
 
   void _openCustomCommandDialog({CustomCommand? command}) async {
+    // [S3] Limit number of custom commands per profile
+    if (command == null) {
+      final provider = Provider.of<ServerProvider>(context, listen: false);
+      final currentCount = provider.activeProfile?.customCommands.length ?? 0;
+      if (currentCount >= 20) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Maximum of 20 custom commands per profile reached.'),
+            backgroundColor: AppTheme.amber,
+          ),
+        );
+        return;
+      }
+    }
+
     final result = await showDialog<CustomCommand>(
       context: context,
       builder: (_) => CustomCommandDialog(existingCommand: command),
@@ -439,21 +459,128 @@ class _PowerControlTabState extends State<PowerControlTab> {
     }
   }
 
-  void _executeCustomCommand(CustomCommand command) async {
-    final provider = Provider.of<ServerProvider>(context, listen: false);
+  void _cancelCustomCommand(CustomCommand command) {
     setState(() {
+      _cancelledCommandIds.add(command.id);
+      _runningCommandIds.remove(command.id);
+      _updateLogs += '\n[${DateTime.now().toIso8601String().substring(11, 19)}] ⏹ Cancelled: ${command.title}\n';
+    });
+    _scrollUpdateLogsToBottom();
+  }
+
+  void _executeCustomCommand(CustomCommand command) async {
+    // If already running, cancel it
+    if (_runningCommandIds.contains(command.id)) {
+      _cancelCustomCommand(command);
+      return;
+    }
+
+    // [S1] Re-validate command at execution time — defense against tampered storage
+    final validation = CommandValidator.validateCustomCommand(command.command);
+    if (validation.isBlocked) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(validation.message ?? 'Command blocked by security validator.'),
+            backgroundColor: AppTheme.crimson,
+          ),
+        );
+      }
+      return;
+    }
+
+    // [S2] Confirmation dialog — prevent accidental one-tap execution
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceDark,
+        title: Row(
+          children: [
+            const Icon(Icons.play_circle_outline, color: AppTheme.neonCyan),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Execute "${command.title}"?',
+                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Command to run on the remote server:',
+              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.obsidian,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.cardBorder),
+              ),
+              child: SelectableText(
+                command.command,
+                style: GoogleFonts.jetBrainsMono(color: AppTheme.neonCyan, fontSize: 12.5),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.neonCyan,
+              foregroundColor: AppTheme.obsidian,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Execute', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Mark as running
+    setState(() {
+      _runningCommandIds.add(command.id);
+      _cancelledCommandIds.remove(command.id);
       _updateLogs += '\n[${DateTime.now().toIso8601String().substring(11, 19)}] Executing: ${command.title}\n> ${command.command}\n';
     });
     _scrollUpdateLogsToBottom();
+
+    final provider = Provider.of<ServerProvider>(context, listen: false);
     try {
       final result = await provider.executeCommand(command.command);
+      if (!mounted) return;
+      // If cancelled while running, discard the result
+      if (_cancelledCommandIds.contains(command.id)) {
+        _cancelledCommandIds.remove(command.id);
+        return;
+      }
       setState(() {
+        _runningCommandIds.remove(command.id);
         _updateLogs += result.trim();
         _updateLogs += '\n';
       });
       _scrollUpdateLogsToBottom();
     } catch (e) {
+      if (!mounted) return;
+      if (_cancelledCommandIds.contains(command.id)) {
+        _cancelledCommandIds.remove(command.id);
+        return;
+      }
       setState(() {
+        _runningCommandIds.remove(command.id);
         _updateLogs += 'Error: $e\n';
       });
       _scrollUpdateLogsToBottom();
@@ -666,44 +793,69 @@ class _PowerControlTabState extends State<PowerControlTab> {
                     case 'web': iconData = Icons.language; break;
                   }
                   
+                  final isRunning = _runningCommandIds.contains(cmd.id);
                   return GlassCard(
                     onTap: () => _executeCustomCommand(cmd),
-                    borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+                    borderColor: isRunning
+                        ? AppTheme.crimson.withValues(alpha: 0.7)
+                        : AppTheme.neonCyan.withValues(alpha: 0.3),
                     child: Stack(
                       children: [
                         Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(iconData, color: AppTheme.neonCyan, size: 28),
+                              if (isRunning) ...[
+                                // Running state: stop icon with pulsing indicator
+                                Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 36,
+                                      height: 36,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: AppTheme.crimson.withValues(alpha: 0.8),
+                                      ),
+                                    ),
+                                    const Icon(Icons.stop_rounded, color: AppTheme.crimson, size: 24),
+                                  ],
+                                ),
+                              ] else
+                                Icon(iconData, color: AppTheme.neonCyan, size: 28),
                               const SizedBox(height: 8),
                               Text(
-                                cmd.title,
+                                isRunning ? 'Stop' : cmd.title,
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                style: GoogleFonts.outfit(
+                                  color: isRunning ? AppTheme.crimson : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        Positioned(
-                          top: -8,
-                          right: -8,
-                          child: PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert, size: 16, color: Colors.white54),
-                            color: AppTheme.surfaceDark,
-                            onSelected: (val) {
-                              if (val == 'edit') {
-                                _openCustomCommandDialog(command: cmd);
-                              } else if (val == 'delete') {
-                                _deleteCustomCommand(cmd);
-                              }
-                            },
-                            itemBuilder: (ctx) => [
-                              const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(color: Colors.white))),
-                              const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppTheme.crimson))),
-                            ],
+                        if (!isRunning)
+                          Positioned(
+                            top: -8,
+                            right: -8,
+                            child: PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 16, color: Colors.white54),
+                              color: AppTheme.surfaceDark,
+                              onSelected: (val) {
+                                if (val == 'edit') {
+                                  _openCustomCommandDialog(command: cmd);
+                                } else if (val == 'delete') {
+                                  _deleteCustomCommand(cmd);
+                                }
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(color: Colors.white))),
+                                const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppTheme.crimson))),
+                              ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   );
